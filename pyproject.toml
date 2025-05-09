@@ -1,0 +1,15 @@
+[project]
+name = "dariko"
+version = "0.0.1"
+description = "Minimal type-checked LLM helper (experimental)"
+authors = [{ name = "Yuto Nose", email = "yutoria0916@gmail.com" }]
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "pydantic>=2.7.0"
+]
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
