@@ -1,6 +1,6 @@
 [project]
 name = "dariko"
-version = "0.0.1"
+version = "0.0.2"
 description = "Minimal type-checked LLM helper (experimental)"
 authors = [{ name = "Yuto Nose", email = "yutoria0916@gmail.com" }]
 license = {text = "MIT"}

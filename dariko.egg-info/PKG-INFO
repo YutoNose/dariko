@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: dariko
-Version: 0.0.1
+Version: 0.0.2
 Summary: Minimal type-checked LLM helper (experimental)
 Author-email: Yuto Nose <yutoria0916@gmail.com>
 License: MIT
@@ -11,11 +11,88 @@ Requires-Dist: pydantic>=2.7.0
 Dynamic: license-file
 Dynamic: requires-python
 
-# dariko (experimental)
+# dariko
 
-Python の型アノテーションを **ほぼ書かずに**  
-LLM 出力を `pydantic` で安全にパースするための最小ライブラリ。
-現在開発中
+Minimal type-checked LLM helper (experimental)
+
+## インストール
+
+```bash
+pip install dariko
+```
+
+## 使用方法
+
+### 基本的な使い方
+
+```python
+from dariko import configure, ask
+from pydantic import BaseModel
+
+# APIキーを設定
+configure("your-api-key")  # または環境変数 DARIKO_API_KEY を設定
+
+# 型定義
+class Person(BaseModel):
+    name: str
+    age: int
+
+# 型アノテーションから自動推論
+result: Person = ask("名前と年齢を教えて")
+print(result.name)  # "Alice"
+print(result.age)   # 30
+```
+
+### 関数の戻り値型から推論
+
+```python
+def get_person(prompt: str) -> Person:
+    return ask(prompt)  # 戻り値型から自動推論
+
+result = get_person("名前と年齢を教えて")
+```
+
+### 明示的な型指定
+
+```python
+result = ask("名前と年齢を教えて", output_model=Person)
+```
+
+### バッチ処理
+
+```python
+from dariko import ask_batch
+
+prompts = [
+    "名前と年齢を教えて",
+    "別の人の名前と年齢を教えて"
+]
+results: list[Person] = ask_batch(prompts)
+```
+
+### エラーハンドリング
+
+```python
+from dariko import ValidationError
+
+try:
+    result: Person = ask("無効な応答を返して")
+except ValidationError as e:
+    print(f"型検証エラー: {e}")
+```
+
+## 型ヒントのサポート
+
+- Pydantic BaseModel
+- 基本的な型（str, int, float, bool）
+- コレクション型（list, dict）
+- Optional, Union などの型
+- ネストされた構造
+- 再帰的な型
+
+## ライセンス
+
+MIT
 
 ```python
 from pydantic import BaseModel

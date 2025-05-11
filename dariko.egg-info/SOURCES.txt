@@ -10,3 +10,4 @@ dariko.egg-info/SOURCES.txt
 dariko.egg-info/dependency_links.txt
 dariko.egg-info/requires.txt
 dariko.egg-info/top_level.txt
+tests/test_dariko.py
