@@ -1,0 +1,12 @@
+LICENSE
+README.md
+pyproject.toml
+setup.py
+dariko/__init__.py
+dariko/core.py
+dariko/dariko.py
+dariko.egg-info/PKG-INFO
+dariko.egg-info/SOURCES.txt
+dariko.egg-info/dependency_links.txt
+dariko.egg-info/requires.txt
+dariko.egg-info/top_level.txt

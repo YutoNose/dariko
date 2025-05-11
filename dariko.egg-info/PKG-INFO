@@ -1,0 +1,29 @@
+Metadata-Version: 2.4
+Name: dariko
+Version: 0.0.1
+Summary: Minimal type-checked LLM helper (experimental)
+Author-email: Yuto Nose <yutoria0916@gmail.com>
+License: MIT
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: pydantic>=2.7.0
+Dynamic: license-file
+Dynamic: requires-python
+
+# dariko (experimental)
+
+Python の型アノテーションを **ほぼ書かずに**  
+LLM 出力を `pydantic` で安全にパースするための最小ライブラリ。
+現在開発中
+
+```python
+from pydantic import BaseModel
+from dariko import ask
+
+class Person(BaseModel):
+    name: str
+    age: int
+
+result: Person = ask("次の JSON を返して: {name:'Alice', age:30}")
+print(result)
