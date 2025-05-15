@@ -1,6 +1,13 @@
 # dariko
 
-Minimal type-checked LLM helper (experimental)
+LLMの出力をPydanticモデルで型安全に扱うためのPythonライブラリ。
+
+## 特徴
+
+- LLMの出力をPydanticモデルで型安全に扱える
+- 型アノテーションから自動的に出力モデルを推論
+- バッチ処理に対応
+- シンプルなAPI
 
 ## インストール
 
@@ -13,36 +20,30 @@ pip install dariko
 ### 基本的な使い方
 
 ```python
-from dariko import configure, ask
 from pydantic import BaseModel
+from dariko import ask, configure
 
-# APIキーを設定
+# APIキーの設定
 configure("your-api-key")  # または環境変数 DARIKO_API_KEY を設定
 
-# 型定義
+# 出力モデルの定義
 class Person(BaseModel):
     name: str
     age: int
+    dummy: bool
+    api_key: str
 
-# 型アノテーションから自動推論
-result: Person = ask("名前と年齢を教えて")
-print(result.name)  # "Alice"
-print(result.age)   # 30
+# 型アノテーションから自動的にモデルを推論
+result: Person = ask("test")
+print(result.name)  # "test"
+print(result.age)   # 20
+print(result.dummy) # True
 ```
 
-### 関数の戻り値型から推論
+### 明示的にモデルを指定
 
 ```python
-def get_person(prompt: str) -> Person:
-    return ask(prompt)  # 戻り値型から自動推論
-
-result = get_person("名前と年齢を教えて")
-```
-
-### 明示的な型指定
-
-```python
-result = ask("名前と年齢を教えて", output_model=Person)
+result = ask("test", output_model=Person)
 ```
 
 ### バッチ処理
@@ -50,36 +51,29 @@ result = ask("名前と年齢を教えて", output_model=Person)
 ```python
 from dariko import ask_batch
 
-prompts = [
-    "名前と年齢を教えて",
-    "別の人の名前と年齢を教えて"
-]
-results: list[Person] = ask_batch(prompts)
+prompts = ["test1", "test2"]
+results = ask_batch(prompts, output_model=Person)
 ```
 
-### エラーハンドリング
+## 開発
 
-```python
-from dariko import ValidationError
+### セットアップ
 
-try:
-    result: Person = ask("無効な応答を返して")
-except ValidationError as e:
-    print(f"型検証エラー: {e}")
+```bash
+git clone https://github.com/yourusername/dariko.git
+cd dariko
+pip install -e .
 ```
 
-## 型ヒントのサポート
+### テスト
 
-- Pydantic BaseModel
-- 基本的な型（str, int, float, bool）
-- コレクション型（list, dict）
-- Optional, Union などの型
-- ネストされた構造
-- 再帰的な型
+```bash
+pytest tests/
+```
 
 ## ライセンス
 
-MIT
+MIT License
 
 ```python
 from pydantic import BaseModel
