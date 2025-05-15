@@ -1,15 +1,36 @@
 [project]
 name = "dariko"
-version = "0.2.0"
-description = "LLM APIを簡単に使えるようにするPythonライブラリ"
+version = "0.2.1"
+description = "LLMの出力をPydanticモデルで型安全に扱うためのPythonライブラリ"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
 authors = [
-    { name = "Your Name", email = "your.email@example.com" },
+    {name = "Yuto Nose", email = "yuto.nose@gmail.com"}
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
 ]
 dependencies = [
     "pydantic>=2.0.0",
     "requests>=2.31.0",
 ]
-requires-python = ">=3.8"
+keywords = ["llm", "pydantic", "type-safety", "openai", "gpt"]
+
+[project.urls]
+Homepage = "https://github.com/YutoNose/dariko"
+Repository = "https://github.com/YutoNose/dariko.git"
+Documentation = "https://github.com/YutoNose/dariko#readme"
 
 [build-system]
 requires = ["hatchling"]
