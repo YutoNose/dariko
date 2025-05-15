@@ -1,6 +1,6 @@
 [project]
 name = "dariko"
-version = "0.1.0"
+version = "0.2.0"
 description = "LLM APIを簡単に使えるようにするPythonライブラリ"
 authors = [
     { name = "Your Name", email = "your.email@example.com" },
