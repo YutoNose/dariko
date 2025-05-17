@@ -70,3 +70,10 @@ known-first-party = ["dariko"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
+
+[project.optional-dependencies]
+develop = [
+    "pytest",
+    "ruff",
+    "pre-commit"
+]
