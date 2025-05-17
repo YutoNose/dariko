@@ -1,6 +1,9 @@
 from pydantic import BaseModel
 
-from dariko import ask
+from dariko import ask, configure
+
+# APIキーの設定(環境変数から取得)
+configure(model="gpt-4o-mini")  # 環境変数 DARIKO_API_KEY から自動的に取得
 
 
 class Person(BaseModel):
