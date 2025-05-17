@@ -1,44 +1,42 @@
-import inspect
-import os
-from typing import Any, Type, get_type_hints, Optional, List
-import json
-import requests
-import dis
 import ast
+import inspect
+import json
+import os
+from typing import Any, Optional, get_type_hints
 
+import requests
+from pydantic import BaseModel, TypeAdapter
 from pydantic import ValidationError as _PydanticValidationError
-from pydantic import TypeAdapter, BaseModel
 
 
 class ValidationError(Exception):
-    """LLM 出力の型検証エラーを表す例外"""
+    """Exception representing LLM output validation error"""
 
     def __init__(self, original: _PydanticValidationError):
         super().__init__(str(original))
         self.original = original
 
 
-# APIキー設定
+# API key configuration
 _API_KEY: Optional[str] = None
 
 
 def configure(api_key: str | None = None) -> None:
     """
-    dariko の設定を行う。
-    
+    Configure dariko settings.
+
     Args:
-        api_key: LLM APIのキー。Noneの場合は環境変数 DARIKO_API_KEY から取得を試みる。
+        api_key: LLM API key. If None, attempts to get from DARIKO_API_KEY environment variable.
     """
     global _API_KEY
     _API_KEY = api_key or os.getenv("DARIKO_API_KEY")
 
 
 def _get_api_key() -> str:
-    """設定されたAPIキーを取得する。未設定の場合はエラーを投げる。"""
+    """Get the configured API key. Raises error if not set."""
     if _API_KEY is None:
         raise RuntimeError(
-            "APIキーが設定されていません。configure() で設定するか、"
-            "環境変数 DARIKO_API_KEY を設定してください。"
+            "API key not configured. Please set using configure() or " "set DARIKO_API_KEY environment variable."
         )
     return _API_KEY
 
@@ -47,17 +45,16 @@ def _infer_output_model_from_ast(frame) -> type | None:
     filename = frame.f_code.co_filename
     lineno = frame.f_lineno
     try:
-        with open(filename, "r", encoding="utf-8") as f:
+        with open(filename, encoding="utf-8") as f:
             source = f.read()
         tree = ast.parse(source, filename)
-        # 直前のAnnAssign（型付き代入）を探索
+        # Find the last AnnAssign (typed assignment)
         last_ann = None
         for node in ast.walk(tree):
             if isinstance(node, ast.AnnAssign) and hasattr(node, "lineno") and node.lineno < lineno:
                 if last_ann is None or node.lineno > last_ann.lineno:
                     last_ann = node
         if last_ann and isinstance(last_ann.target, ast.Name):
-            varname = last_ann.target.id
             type_str = ast.unparse(last_ann.annotation)
             try:
                 model = eval(type_str, frame.f_globals, frame.f_locals)
@@ -71,10 +68,10 @@ def _infer_output_model_from_ast(frame) -> type | None:
     return None
 
 
-def _infer_output_model_from_locals(frame) -> Type[Any] | None:
+def _infer_output_model_from_locals(frame) -> type[Any] | None:
     func_name = frame.f_code.co_name
     if func_name == "<module>":
-        # モジュールスコープの場合はASTで推論する
+        # Use AST inference for module scope
         return _infer_output_model_from_ast(frame)
     func = frame.f_globals.get(func_name, None)
     if func is not None:
@@ -84,31 +81,31 @@ def _infer_output_model_from_locals(frame) -> Type[Any] | None:
     hints = frame.f_locals.get("__annotations__", {})
     if len(hints) == 1:
         return next(iter(hints.values()))
-    # fallback: ASTで推論
+    # fallback: use AST inference
     return _infer_output_model_from_ast(frame)
 
 
-def _infer_output_model_from_return_type(frame) -> Type[Any] | None:
+def _infer_output_model_from_return_type(frame) -> type[Any] | None:
     """
-    呼び出し元関数の戻り値型アノテーションを取得する。
+    Get the return type annotation of the caller function.
     """
     try:
-        # 呼び出し元の関数オブジェクトを取得
+        # Get caller function object
         caller_frame = frame.f_back
         if caller_frame is None:
             return None
-        
-        # 関数名を取得
+
+        # Get function name
         func_name = caller_frame.f_code.co_name
         if func_name == "<module>":
             return None
-        
-        # 関数オブジェクトを取得
+
+        # Get function object
         func = caller_frame.f_locals.get(func_name)
         if func is None:
             return None
-        
-        # 戻り値型を取得
+
+        # Get return type
         hints = get_type_hints(func)
         return hints.get("return")
     except Exception:
@@ -116,55 +113,55 @@ def _infer_output_model_from_return_type(frame) -> Type[Any] | None:
 
 
 def _get_pydantic_model(model):
-    origin = getattr(model, '__origin__', None)
-    if origin in (list, List):
+    origin = getattr(model, "__origin__", None)
+    if origin in (list, list):
         model = model.__args__[0]
     if not (isinstance(model, type) and issubclass(model, BaseModel)):
-        raise TypeError("output_modelはPydanticモデルである必要がある")
+        raise TypeError("output_model must be a Pydantic model")
     return model
 
 
-def ask(prompt: str, *, output_model: Type[Any] | None = None) -> Any:
+def ask(prompt: str, *, output_model: type[Any] | None = None) -> Any:
     """
-    LLM へ prompt を投げ、output_model で検証済みのオブジェクトを返す。
-    output_model が未指定なら呼び出し元のローカル変数アノテーションを推測。
-    関数内で呼ばれた場合は戻り値型アノテーションも考慮する。
+    Send prompt to LLM and return validated object using output_model.
+    If output_model is not specified, infers from caller's local variable annotations.
+    If called within a function, also considers return type annotation.
 
     Args:
-        prompt: LLMに送信するプロンプト
-        output_model: 出力の型。未指定の場合は自動推論を試みる。
+        prompt: Prompt to send to LLM
+        output_model: Output type. If not specified, attempts automatic inference.
 
     Returns:
-        output_model で検証済みのオブジェクト
+        Object validated by output_model
 
     Raises:
-        ValidationError: 型検証に失敗した場合
-        TypeError: 型アノテーションが取得できなかった場合
-        RuntimeError: APIキーが設定されていない場合
+        ValidationError: If type validation fails
+        TypeError: If type annotation cannot be obtained
+        RuntimeError: If API key is not configured
     """
     model = output_model
     if model is None:
-        caller_frame = inspect.currentframe().f_back  # 1 つ上のフレーム
+        caller_frame = inspect.currentframe().f_back  # One frame up
         if caller_frame is None:
-            raise TypeError("型アノテーションが取得できませんでした。output_model を指定してください。")
-        
-        # ローカル変数の型アノテーションを試す
+            raise TypeError("Could not get type annotation. Please specify output_model.")
+
+        # Try local variable type annotation
         model = _infer_output_model_from_locals(caller_frame)
-        
-        # 戻り値型アノテーションを試す
+
+        # Try return type annotation
         if model is None:
             model = _infer_output_model_from_return_type(caller_frame)
 
     if model is None:
-        raise TypeError("型アノテーションが取得できませんでした。output_model を指定してください。")
+        raise TypeError("Could not get type annotation. Please specify output_model.")
 
-    # Pydanticモデルを取得
+    # Get Pydantic model
     pyd_model = _get_pydantic_model(model)
 
-    # APIキーを取得
+    # Get API key
     api_key = _get_api_key()
 
-    # LLM APIを呼び出す
+    # Call LLM API
     response = requests.post(
         "https://api.openai.com/v1/chat/completions",
         headers={
@@ -176,74 +173,73 @@ def ask(prompt: str, *, output_model: Type[Any] | None = None) -> Any:
             "messages": [
                 {
                     "role": "system",
-                    "content": f"以下のJSONスキーマに従って応答してください：\n{pyd_model.model_json_schema()}"
+                    "content": f"Please respond according to the following JSON schema:\n{pyd_model.model_json_schema()}",
                 },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
+                {"role": "user", "content": prompt},
             ],
-            "response_format": {"type": "json_object"}
-        }
+            "response_format": {"type": "json_object"},
+        },
     )
-    
+
     if response.status_code != 200:
-        raise RuntimeError(f"LLM API呼び出しに失敗しました: {response.text}")
+        raise RuntimeError(f"LLM API call failed: {response.text}")
 
     try:
         llm_raw_output = response.json()["choices"][0]["message"]["content"]
         llm_raw_output = json.loads(llm_raw_output)
-        llm_raw_output["api_key"] = api_key  # APIキーを追加
+        llm_raw_output["api_key"] = api_key  # Add API key
         return TypeAdapter(model).validate_python(llm_raw_output)
     except _PydanticValidationError as e:
         raise ValidationError(e) from None
     except json.JSONDecodeError as e:
-        raise ValidationError(_PydanticValidationError.from_exception_data(
-            "JSONDecodeError",
-            [{"loc": (), "msg": f"LLMの出力がJSONとして解析できませんでした: {str(e)}", "type": "value_error"}]
-        )) from None
+        raise ValidationError(
+            _PydanticValidationError.from_exception_data(
+                "JSONDecodeError",
+                [{"loc": (), "msg": f"Could not parse LLM output as JSON: {e!s}", "type": "value_error"}],
+            )
+        ) from None
 
 
-def ask_batch(prompts: list[str], *, output_model: Type[Any] | None = None) -> list[Any]:
+def ask_batch(prompts: list[str], *, output_model: type[Any] | None = None) -> list[Any]:
     """
-    複数のプロンプトをバッチ処理で実行する。
+    Execute multiple prompts in batch.
 
     Args:
-        prompts: LLMに送信するプロンプトのリスト
-        output_model: 出力の型。未指定の場合は自動推論を試みる。
+        prompts: List of prompts to send to LLM
+        output_model: Output type. If not specified, attempts automatic inference.
 
     Returns:
-        output_model で検証済みのオブジェクトのリスト
+        List of objects validated by output_model
 
     Raises:
-        ValidationError: 型検証に失敗した場合
-        TypeError: 型アノテーションが取得できなかった場合
-        RuntimeError: APIキーが設定されていない場合
+        ValidationError: If type validation fails
+        TypeError: If type annotation cannot be obtained
+        RuntimeError: If API key is not configured
     """
-    # 型アノテーションの取得
+    # Get type annotation
     model = output_model
     if model is None:
         caller_frame = inspect.currentframe().f_back
         if caller_frame is None:
-            raise TypeError("型アノテーションが取得できませんでした。output_model を指定してください。")
-        
-        # ローカル変数の型アノテーションを試す
+            raise TypeError("Could not get type annotation. Please specify output_model.")
+
+        # Try local variable type annotation
         model = _infer_output_model_from_locals(caller_frame)
-        
-        # 戻り値型アノテーションを試す
+
+        # Try return type annotation
         if model is None:
             model = _infer_output_model_from_return_type(caller_frame)
 
     if model is None:
-        raise TypeError("型アノテーションが取得できませんでした。output_model を指定してください。")
+        raise TypeError("Could not get type annotation. Please specify output_model.")
 
-    # Pydanticモデルを取得
+    # Get Pydantic model
     pyd_model = _get_pydantic_model(model)
 
-    # APIキーを取得
+    # Get API key
     api_key = _get_api_key()
 
-    # 各プロンプトに対してLLM APIを呼び出す
+    # Call LLM API for each prompt
     results = []
     for prompt in prompts:
         response = requests.post(
@@ -257,32 +253,32 @@ def ask_batch(prompts: list[str], *, output_model: Type[Any] | None = None) -> l
                 "messages": [
                     {
                         "role": "system",
-                        "content": f"以下のJSONスキーマに従って応答してください：\n{pyd_model.model_json_schema()}"
+                        "content": f"Please respond according to the following JSON schema:\n{pyd_model.model_json_schema()}",
                     },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
+                    {"role": "user", "content": prompt},
                 ],
-                "response_format": {"type": "json_object"}
-            }
+                "response_format": {"type": "json_object"},
+            },
         )
-        
+
         if response.status_code != 200:
-            raise RuntimeError(f"LLM API呼び出しに失敗しました: {response.text}")
+            raise RuntimeError(f"LLM API call failed: {response.text}")
 
         try:
             llm_raw_output = response.json()["choices"][0]["message"]["content"]
             llm_raw_output = json.loads(llm_raw_output)
+            llm_raw_output["api_key"] = api_key  # Add API key
             llm_raw_output["api_key"] = api_key  # APIキーを追加
             result = TypeAdapter(model).validate_python(llm_raw_output)
             results.append(result)
         except _PydanticValidationError as e:
             raise ValidationError(e) from None
         except json.JSONDecodeError as e:
-            raise ValidationError(_PydanticValidationError.from_exception_data(
-                "JSONDecodeError",
-                [{"loc": (), "msg": f"LLMの出力がJSONとして解析できませんでした: {str(e)}", "type": "value_error"}]
-            )) from None
+            raise ValidationError(
+                _PydanticValidationError.from_exception_data(
+                    "JSONDecodeError",
+                    [{"loc": (), "msg": f"LLMの出力がJSONとして解析できませんでした: {e!s}", "type": "value_error"}],
+                )
+            ) from None
 
     return results

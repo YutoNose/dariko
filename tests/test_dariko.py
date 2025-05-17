@@ -1,11 +1,10 @@
 import os
-from typing import List
 from unittest.mock import patch
 
 import pytest
 from pydantic import BaseModel
 
-from dariko import ask, ask_batch, configure, ValidationError
+from dariko import ValidationError, ask, ask_batch, configure
 
 
 class Person(BaseModel):
@@ -26,11 +25,7 @@ def mock_llm_response(*args, **kwargs):
             self.status_code = 200
             self._json = {
                 "choices": [
-                    {
-                        "message": {
-                            "content": '{"name": "test", "age": 20, "dummy": true, "api_key": "test_key"}'
-                        }
-                    }
+                    {"message": {"content": '{"name": "test", "age": 20, "dummy": true, "api_key": "test_key"}'}}
                 ]
             }
 
@@ -82,7 +77,7 @@ def test_ask_with_explicit_model(mock_post):
 @patch("requests.post", side_effect=mock_llm_response)
 def test_ask_batch(mock_post):
     prompts = ["test1", "test2"]
-    results: List[Person] = ask_batch(prompts, output_model=Person)
+    results: list[Person] = ask_batch(prompts, output_model=Person)
     assert len(results) == 2
     assert all(isinstance(r, Person) for r in results)
     assert all(r.dummy is True for r in results)
@@ -93,15 +88,7 @@ def test_validation_error():
         class MockResponse:
             def __init__(self):
                 self.status_code = 200
-                self._json = {
-                    "choices": [
-                        {
-                            "message": {
-                                "content": '{"invalid": "response"}'
-                            }
-                        }
-                    ]
-                }
+                self._json = {"choices": [{"message": {"content": '{"invalid": "response"}'}}]}
 
             def json(self):
                 return self._json
@@ -110,4 +97,4 @@ def test_validation_error():
 
     with patch("requests.post", side_effect=mock_invalid_response):
         with pytest.raises(ValidationError):
-            result: Person = ask("invalid", output_model=Person) 
+            ask("invalid", output_model=Person)

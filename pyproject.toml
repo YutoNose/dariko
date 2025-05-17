@@ -42,3 +42,31 @@ packages = ["dariko"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+
+[tool.ruff]
+target-version = "py39"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "F",   # Pyflakes
+    "E",   # pycodestyle error
+    "W",   # pycodestyle warning
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "RUF", # Ruff-specific rules
+    "UP",  # pyupgrade
+]
+
+ignore = [
+    "E501",  # line too long
+    "ANN",   # flake8-annotations
+    "D",     # pydocstyle
+    "PL",    # Pylint
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["dariko"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"

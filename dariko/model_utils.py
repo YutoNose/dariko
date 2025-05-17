@@ -1,26 +1,24 @@
 import ast
-import inspect
-from typing import Any, Type, get_type_hints, List
+from typing import Any, get_type_hints
 
 from pydantic import BaseModel
 
 
 def infer_output_model_from_ast(frame) -> type | None:
-    """ASTを使用して型アノテーションを推論する"""
+    """Infer type annotation using AST."""
     filename = frame.f_code.co_filename
     lineno = frame.f_lineno
     try:
-        with open(filename, "r", encoding="utf-8") as f:
+        with open(filename, encoding="utf-8") as f:
             source = f.read()
         tree = ast.parse(source, filename)
-        # 直前のAnnAssign（型付き代入）を探索
+        # Find the last AnnAssign (type annotated assignment)
         last_ann = None
         for node in ast.walk(tree):
             if isinstance(node, ast.AnnAssign) and hasattr(node, "lineno") and node.lineno < lineno:
                 if last_ann is None or node.lineno > last_ann.lineno:
                     last_ann = node
         if last_ann and isinstance(last_ann.target, ast.Name):
-            varname = last_ann.target.id
             type_str = ast.unparse(last_ann.annotation)
             try:
                 model = eval(type_str, frame.f_globals, frame.f_locals)
@@ -34,11 +32,11 @@ def infer_output_model_from_ast(frame) -> type | None:
     return None
 
 
-def infer_output_model_from_locals(frame) -> Type[Any] | None:
-    """ローカル変数の型アノテーションから型を推論する"""
+def infer_output_model_from_locals(frame) -> type[Any] | None:
+    """Infer type from local variable annotations."""
     func_name = frame.f_code.co_name
     if func_name == "<module>":
-        # モジュールスコープの場合はASTで推論する
+        # Use AST inference for module scope
         return infer_output_model_from_ast(frame)
     func = frame.f_globals.get(func_name, None)
     if func is not None:
@@ -48,29 +46,29 @@ def infer_output_model_from_locals(frame) -> Type[Any] | None:
     hints = frame.f_locals.get("__annotations__", {})
     if len(hints) == 1:
         return next(iter(hints.values()))
-    # fallback: ASTで推論
+    # fallback: use AST inference
     return infer_output_model_from_ast(frame)
 
 
-def infer_output_model_from_return_type(frame) -> Type[Any] | None:
-    """呼び出し元関数の戻り値型アノテーションを取得する"""
+def infer_output_model_from_return_type(frame) -> type[Any] | None:
+    """Get return type annotation from the caller function."""
     try:
-        # 呼び出し元の関数オブジェクトを取得
+        # Get caller function object
         caller_frame = frame.f_back
         if caller_frame is None:
             return None
-        
-        # 関数名を取得
+
+        # Get function name
         func_name = caller_frame.f_code.co_name
         if func_name == "<module>":
             return None
-        
-        # 関数オブジェクトを取得
+
+        # Get function object
         func = caller_frame.f_locals.get(func_name)
         if func is None:
             return None
-        
-        # 戻り値型を取得
+
+        # Get return type
         hints = get_type_hints(func)
         return hints.get("return")
     except Exception:
@@ -78,10 +76,10 @@ def infer_output_model_from_return_type(frame) -> Type[Any] | None:
 
 
 def get_pydantic_model(model):
-    """Pydanticモデルを取得する"""
-    origin = getattr(model, '__origin__', None)
-    if origin in (list, List):
+    """Get Pydantic model."""
+    origin = getattr(model, "__origin__", None)
+    if origin in (list, list):
         model = model.__args__[0]
     if not (isinstance(model, type) and issubclass(model, BaseModel)):
-        raise TypeError("output_modelはPydanticモデルである必要がある")
-    return model 
+        raise TypeError("output_model must be a Pydantic model")
+    return model

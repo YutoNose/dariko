@@ -6,4 +6,4 @@ class ValidationError(Exception):
 
     def __init__(self, original: _PydanticValidationError):
         super().__init__(str(original))
-        self.original = original 
+        self.original = original
