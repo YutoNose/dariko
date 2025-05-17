@@ -33,11 +33,14 @@ Repository = "https://github.com/YutoNose/dariko.git"
 Documentation = "https://github.com/YutoNose/dariko#readme"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["dariko"]
+
+[tool.hatch.build.hooks.vcs]
+version-file = "dariko/__init__.py"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
