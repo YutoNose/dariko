@@ -4,7 +4,8 @@ from unittest.mock import patch
 import pytest
 from pydantic import BaseModel
 
-from dariko import ValidationError, ask, ask_batch, configure
+from dariko.llm import ValidationError, ask, ask_batch
+from dariko.config import configure
 
 
 class Person(BaseModel):
@@ -17,6 +18,7 @@ class Person(BaseModel):
 @pytest.fixture(autouse=True)
 def set_api_key():
     os.environ["DARIKO_API_KEY"] = "test_key"
+    configure()
 
 
 def mock_llm_response(*args, **kwargs):
@@ -44,8 +46,9 @@ def test_configure(mock_post):
     assert result.dummy is True
     assert result.api_key == "test_key"
 
-    # 直接設定
-    configure("direct_key")
+    # 環境変数を変更
+    os.environ["DARIKO_API_KEY"] = "direct_key"
+    configure()
     result: Person = ask("test", output_model=Person)
     assert result.api_key == "direct_key"
 
