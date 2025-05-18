@@ -1,5 +1,6 @@
 import os
 from typing import Optional
+
 from dotenv import load_dotenv
 
 # .env ファイルを読み込む
@@ -23,9 +24,7 @@ def configure(model: str = "gpt-3.5-turbo") -> None:
     if env_key is not None:
         _API_KEY = env_key
     else:
-        raise RuntimeError(
-            "APIキーが設定されていません。環境変数 DARIKO_API_KEY を設定してください。"
-        )
+        raise RuntimeError("APIキーが設定されていません。環境変数 DARIKO_API_KEY を設定してください。")
     _MODEL = model
 
 

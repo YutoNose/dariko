@@ -4,8 +4,8 @@ from unittest.mock import patch
 import pytest
 from pydantic import BaseModel
 
-from dariko.llm import ValidationError, ask, ask_batch
 from dariko.config import configure
+from dariko.llm import ValidationError, ask, ask_batch
 
 
 class Person(BaseModel):
