@@ -75,6 +75,6 @@ convention = "google"
 develop = [
     "pytest",
     "ruff",
-    "pre-commit"
+    "pre-commit",
     "dotenv"
 ]
