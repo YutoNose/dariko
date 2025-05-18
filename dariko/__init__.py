@@ -3,6 +3,7 @@
 
 from .exceptions import ValidationError
 from .config import configure
+from .llm import ask, ask_batch
 
 __version__ = '0.2.2'
 __version_tuple__ = (0, 2, 2)

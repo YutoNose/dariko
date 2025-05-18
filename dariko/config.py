@@ -30,11 +30,10 @@ def configure(model: str = "gpt-3.5-turbo") -> None:
 
 
 def get_api_key() -> str:
-    """環境変数からAPIキーを取得する。未設定の場合はエラーを投げる。"""
-    api_key = os.getenv("DARIKO_API_KEY")
-    if api_key is None:
-        raise RuntimeError("環境変数 DARIKO_API_KEY が設定されていません。")
-    return api_key
+    """設定されたAPIキーを取得する。未設定の場合はエラーを投げる。"""
+    if _API_KEY is None:
+        raise RuntimeError("APIキーが設定されていません。configure()を呼び出してください。")
+    return _API_KEY
 
 
 def get_model() -> str:
