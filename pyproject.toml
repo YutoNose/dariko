@@ -76,4 +76,5 @@ develop = [
     "pytest",
     "ruff",
     "pre-commit"
+    "dotenv"
 ]
