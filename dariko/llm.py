@@ -11,8 +11,7 @@ from pydantic import ValidationError as _PydanticValidationError
 
 from .config import get_api_key, get_model
 from .exceptions import ValidationError
-from .model_utils import infer_output_model, get_pydantic_model
-
+from .model_utils import get_pydantic_model, infer_output_model
 
 # ─────────────────────────────────────────────────────────────
 # 内部ユーティリティ

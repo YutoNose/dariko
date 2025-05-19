@@ -3,9 +3,9 @@ from __future__ import annotations
 import ast
 import inspect
 import logging
-from pathlib import Path
-from typing import Any, get_type_hints, Type
 import os
+from pathlib import Path
+from typing import Any, Type, get_type_hints
 
 from pydantic import BaseModel
 
@@ -104,7 +104,8 @@ def infer_output_model(frame=None) -> Type[BaseModel] | None:
         2. 現フレームのローカル変数アノテーション
         3. AST 解析による推定
     """
-    import inspect, os, ast
+    import ast
+    import inspect
 
     # ------------------------------------------------------------
     # ❶ 呼び出し側から frame が渡された場合はそれを最優先

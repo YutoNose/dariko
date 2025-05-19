@@ -9,8 +9,44 @@ Darikoは、Pythonの型アノテーションを活用して、LLMからの出�
 Darikoは以下の優先順位で型を推論します：
 
 1. 呼び出し元関数のreturn型ヒント
-2. 現フレームのローカル変数アノテーション（1個だけの場合）
+2. 変数アノテーション（AnnAssign/type_comment）
 3. AST解析による推定
+
+## 実践例
+
+### 関数の戻り値型アノテーションによる推論
+
+```python
+def get_person() -> Person:
+    return ask('以下の形式のJSONを返してください:\n{"name": "山田太郎", "age": 25, "dummy": false}')
+
+person = get_person()
+print(person.name)  # "山田太郎"
+```
+
+### 変数アノテーションによる推論
+
+```python
+result: Person = ask('以下の形式のJSONを返してください:\n{"name": "佐藤花子", "age": 30, "dummy": true}')
+print(result.name)  # "佐藤花子"
+```
+
+### バッチ処理でも型推論が効く
+
+```python
+from typing import List
+
+def get_people() -> List[Person]:
+    prompts = [
+        '以下の形式のJSONを返してください:\n{"name": "山田太郎", "age": 25, "dummy": false}',
+        '以下の形式のJSONを返してください:\n{"name": "佐藤花子", "age": 30, "dummy": true}',
+    ]
+    return ask_batch(prompts)
+
+people = get_people()
+for p in people:
+    print(p.name)
+```
 
 ## ASTによる型推論の詳細
 
@@ -20,92 +56,36 @@ AST（Abstract Syntax Tree）は、プログラムのソースコードを木構
 
 ### 2. 型アノテーションの検出方法
 
-Darikoは以下の2つのパターンで型アノテーションを検出します：
+Darikoは以下のパターンで型アノテーションを検出します：
+
+- 関数の戻り値型アノテーション（`def func() -> Model:`）
+- 変数の型アノテーション（`result: Model = ...` または `# type: Model`）
 
 #### 2.1 型アノテーション付き代入（AnnAssign）
 
 ```python
-result: Person = ask(prompt)  # このような形式
-```
-
-この場合、ASTでは以下のような構造になります：
-
-```python
-AnnAssign(
-    target=Name(id='result', ctx=Store()),
-    annotation=Name(id='Person', ctx=Load()),
-    value=Call(...),
-    simple=1
-)
+result: Person = ask(prompt)
 ```
 
 #### 2.2 型コメント付き代入（Assign + type_comment）
 
 ```python
-result = ask(prompt)  # type: Person  # このような形式
+result = ask(prompt)  # type: Person
 ```
 
-この場合、ASTでは以下のような構造になります：
+#### 2.3 関数の戻り値型アノテーション
 
 ```python
-Assign(
-    targets=[Name(id='result', ctx=Store())],
-    value=Call(...),
-    type_comment='Person'
-)
+def get_person() -> Person:
+    return ask(...)
 ```
 
-### 3. 実装の詳細
+### 3. 実装の流れ
 
-#### 3.1 ファイルの解析
-
-```python
-file_path = Path(frame.f_code.co_filename)
-tree = ast.parse(file_path.read_text(encoding="utf-8"))
-```
-
-- 現在実行中のフレームからファイルパスを取得
-- ファイルの内容を読み込み
-- `ast.parse()`でASTを生成
-
-#### 3.2 ノードの探索
-
-```python
-for node in ast.walk(tree):
-    node_line = getattr(node, "lineno", 0)
-    if node_line > current_line:
-        continue
-```
-
-- `ast.walk()`で全ノードを走査
-- 現在の行より後のノードは無視
-- 各行のノードを評価
-
-#### 3.3 型アノテーションの抽出
-
-```python
-if isinstance(node, ast.AnnAssign):
-    if hasattr(node.target, 'id') and node.target.id == var_name:
-        ann_type_str = ast.unparse(node.annotation)
-elif isinstance(node, ast.Assign):
-    if hasattr(node.targets[0], 'id') and node.targets[0].id == var_name:
-        if hasattr(node, 'type_comment') and node.type_comment:
-            ann_type_str = node.type_comment
-```
-
-- `AnnAssign`ノードの場合：`annotation`属性から型を取得
-- `Assign`ノードの場合：`type_comment`属性から型を取得
-
-#### 3.4 型の評価
-
-```python
-ann = eval(ann_type_str, frame.f_globals, frame.f_locals)
-validated = _validate(ann)
-```
-
-- 型文字列を実際の型オブジェクトに評価
-- グローバルとローカルの名前空間を使用
-- Pydanticモデルとして妥当か検証
+- 呼び出し元のフレーム情報から、該当ファイルをASTでパース
+- 関数定義や変数アノテーションを探索し、型文字列を抽出
+- `eval`で型オブジェクトに変換し、PydanticのBaseModelサブクラスか検証
+- 最初に見つかった有効な型を返す
 
 ### 4. デバッグとロギング
 
@@ -113,11 +93,27 @@ validated = _validate(ann)
 
 ```python
 logger.debug(f"Parsing file: {file_path}")
-logger.debug(f"Current line: {current_line}")
-logger.debug(f"AST node: {ast.dump(node)}")
+logger.debug(f"Caller line: {caller_line}")
+logger.debug(f"Found function return type: {ann_type_str}")
 ```
 
 これにより、型推論の過程を追跡し、問題が発生した場合の原因特定が容易になります。
+
+## 注意点・制限事項
+
+- 型アノテーションが取得できない場合は `output_model` を明示的に指定してください。
+- 型推論は「関数の戻り値型」→「変数アノテーション」→「AST解析」の順で行われます。
+- 型アノテーションはPydanticのBaseModelサブクラスである必要があります。
+- 型アノテーションは、`ask`関数の呼び出しと同じ行か、直前の行に存在する必要があります
+- 複数の型アノテーションが存在する場合、最も近いものが使用されます
+- list[Model] 形式にも対応しています
+
+## 今後の改善点
+
+1. より複雑な型アノテーションパターンのサポート
+2. 型推論の精度向上
+3. エラーメッセージの改善
+4. パフォーマンスの最適化
 
 ## 使用例
 

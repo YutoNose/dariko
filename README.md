@@ -63,6 +63,47 @@ for i, result in enumerate(results, 1):
     print(f"ダミー: {result.dummy}")
 ```
 
+## 型推論の実践例
+
+### 関数の戻り値型アノテーションによる推論
+
+```python
+def get_person() -> Person:
+    return ask('以下の形式のJSONを返してください:\n{"name": "山田太郎", "age": 25, "dummy": false}')
+
+person = get_person()
+print(person.name)  # "山田太郎"
+```
+
+### 変数アノテーションによる推論
+
+```python
+result: Person = ask('以下の形式のJSONを返してください:\n{"name": "佐藤花子", "age": 30, "dummy": true}')
+print(result.name)  # "佐藤花子"
+```
+
+### バッチ処理でも型推論が効く
+
+```python
+from typing import List
+
+def get_people() -> List[Person]:
+    prompts = [
+        '以下の形式のJSONを返してください:\n{"name": "山田太郎", "age": 25, "dummy": false}',
+        '以下の形式のJSONを返してください:\n{"name": "佐藤花子", "age": 30, "dummy": true}',
+    ]
+    return ask_batch(prompts)
+
+people = get_people()
+for p in people:
+    print(p.name)
+```
+
+### 注意点
+- 型アノテーションが取得できない場合は `output_model` を明示的に指定してください。
+- 型推論は「関数の戻り値型」→「変数アノテーション」→「AST解析」の順で行われます。
+- 型アノテーションはPydanticのBaseModelサブクラスである必要があります。
+
 ## 型推論の仕組み
 
 Darikoは以下の優先順位で型を推論します：
