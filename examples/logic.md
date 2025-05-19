@@ -114,31 +114,3 @@ logger.debug(f"Found function return type: {ann_type_str}")
 2. 型推論の精度向上
 3. エラーメッセージの改善
 4. パフォーマンスの最適化
-
-## 使用例
-
-```python
-from pydantic import BaseModel
-from dariko import ask
-
-class Person(BaseModel):
-    name: str
-    age: int
-
-# 型アノテーションを使用した呼び出し
-result: Person = ask("名前と年齢を教えてください")
-print(result.name)  # 型安全にアクセス可能
-```
-
-## 制限事項
-
-1. 型アノテーションは、`ask`関数の呼び出しと同じ行か、直前の行に存在する必要があります
-2. 複数の型アノテーションが存在する場合、最も近いものが使用されます
-3. 型アノテーションは、Pydanticモデルまたは`list[PydanticModel]`の形式である必要があります
-
-## 今後の改善点
-
-1. より複雑な型アノテーションパターンのサポート
-2. 型推論の精度向上
-3. エラーメッセージの改善
-4. パフォーマンスの最適化 

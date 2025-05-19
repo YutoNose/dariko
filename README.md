@@ -140,14 +140,3 @@ pytest tests/
 ## ライセンス
 
 MIT License
-
-```python
-from pydantic import BaseModel
-from dariko import ask
-
-class Person(BaseModel):
-    name: str
-    age: int
-
-result: Person = ask("次の JSON を返して: {name:'Alice', age:30}")
-print(result)
