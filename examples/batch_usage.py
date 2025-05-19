@@ -12,7 +12,6 @@ class Person(BaseModel):
     name: str
     age: int
     dummy: bool
-    api_key: str
 
 
 prompt = "以下の形式のJSONを返してください:\n" + '{"name": "山田太郎", "age": 25, "dummy": false}'

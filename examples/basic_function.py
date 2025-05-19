@@ -14,7 +14,10 @@ class Person(BaseModel):
 
 def get_person_info() -> Person:
     """人物情報を取得する関数"""
-    return ask('以下の形式のJSONを返してください:\n{"name": "山田太郎", "age": 25, "dummy": false}')
+    return ask(
+        '以下の形式のJSONを返してください:\n{"name": "山田太郎", "age": 25, "dummy": false}',
+        output_model=Person
+    )
 
 
 # 関数の戻り値として使用

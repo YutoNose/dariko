@@ -11,7 +11,7 @@ from pydantic import ValidationError as _PydanticValidationError
 
 from .config import get_api_key, get_model
 from .exceptions import ValidationError
-from .model_utils import infer_output_model, get_pydantic_model  # ← 新 API を利用
+from .model_utils import infer_output_model, get_pydantic_model
 
 
 # ─────────────────────────────────────────────────────────────
@@ -67,7 +67,6 @@ def _parse_and_validate(
     """
     try:
         data = json.loads(raw_json)
-        data["api_key"] = api_key  # そのまま保持したいなら追加
         return TypeAdapter(pyd_model).validate_python(data)
     except json.JSONDecodeError as e:
         raise ValidationError(
