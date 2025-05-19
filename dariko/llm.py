@@ -1,171 +1,118 @@
+# llm.py
+from __future__ import annotations
+
 import inspect
 import json
-from typing import Any
+from typing import Any, List, Type
 
 import requests
-from pydantic import TypeAdapter
+from pydantic import BaseModel, TypeAdapter
 from pydantic import ValidationError as _PydanticValidationError
 
 from .config import get_api_key, get_model
 from .exceptions import ValidationError
-from .model_utils import (
-    get_pydantic_model,
-    infer_output_model_from_locals,
-    infer_output_model_from_return_type,
-)
+from .model_utils import infer_output_model, get_pydantic_model  # ← 新 API を利用
 
 
-def ask(prompt: str, *, output_model: type[Any] | None = None) -> Any:
+# ─────────────────────────────────────────────────────────────
+# 内部ユーティリティ
+# ─────────────────────────────────────────────────────────────
+_OPENAI_URL = "https://api.openai.com/v1/chat/completions"
+
+
+def _resolve_model(output_model: Type[Any] | None) -> Type[BaseModel]:
     """
-    LLM へ prompt を投げ、output_model で検証済みのオブジェクトを返す。
-    output_model が未指定なら呼び出し元のローカル変数アノテーションを推測。
-    関数内で呼ばれた場合は戻り値型アノテーションも考慮する。
-
-    Args:
-        prompt: LLMに送信するプロンプト
-        output_model: 出力の型。未指定の場合は自動推論を試みる。
-
-    Returns:
-        output_model で検証済みのオブジェクト
-
-    Raises:
-        ValidationError: 型検証に失敗した場合
-        TypeError: 型アノテーションが取得できなかった場合
-        RuntimeError: APIキーが設定されていない場合
+    output_model が None の場合は呼び出しフレームから推論し、
+    最終的に Pydantic Model 型を返す。
     """
-    model = output_model
-    if model is None:
-        caller_frame = inspect.currentframe().f_back  # 1 つ上のフレーム
-        if caller_frame is None:
-            raise TypeError("型アノテーションが取得できませんでした。output_model を指定してください。")
-
-        # ローカル変数の型アノテーションを試す
-        model = infer_output_model_from_locals(caller_frame)
-
-        # 戻り値型アノテーションを試す
+    if output_model is None:
+        caller_frame = inspect.currentframe().f_back
+        model = infer_output_model(caller_frame)
         if model is None:
-            model = infer_output_model_from_return_type(caller_frame)
+            raise TypeError("型アノテーションが取得できませんでした。output_model を指定してください。")
+    else:
+        model = output_model
+    return get_pydantic_model(model)  # 型チェックも兼ねる
 
-    if model is None:
-        raise TypeError("型アノテーションが取得できませんでした。output_model を指定してください。")
 
-    # Pydanticモデルを取得
-    get_pydantic_model(model)
-
-    # APIキーを取得
+def _post_to_llm(messages: list[dict[str, str]]) -> str:
+    """
+    OpenAI ChatCompletion を呼び出して content 文字列を返す。
+    """
     api_key = get_api_key()
-
-    # LLM APIを呼び出す
-    response = requests.post(
-        "https://api.openai.com/v1/chat/completions",
+    r = requests.post(
+        _OPENAI_URL,
         headers={
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         },
         json={
             "model": get_model(),
-            "messages": [{"role": "system", "content": prompt}, {"role": "user", "content": prompt}],
+            "messages": messages,
             "response_format": {"type": "json_object"},
         },
+        timeout=30,
     )
+    if r.status_code != 200:
+        raise RuntimeError(f"LLM API呼び出しに失敗しました: {r.text}")
+    return r.json()["choices"][0]["message"]["content"]
 
-    if response.status_code != 200:
-        raise RuntimeError(f"LLM API呼び出しに失敗しました: {response.text}")
 
+def _parse_and_validate(
+    raw_json: str, pyd_model: Type[BaseModel], *, api_key: str
+) -> BaseModel:
+    """
+    LLM 出力(JSON文字列)を parse & Pydantic 検証。
+    成功すれば Pydantic モデルのインスタンスを返す。
+    """
     try:
-        llm_raw_output = response.json()["choices"][0]["message"]["content"]
-        llm_raw_output = json.loads(llm_raw_output)
-        llm_raw_output["api_key"] = api_key  # APIキーを追加
-        return TypeAdapter(model).validate_python(llm_raw_output)
-    except _PydanticValidationError as e:
-        raise ValidationError(e) from None
+        data = json.loads(raw_json)
+        data["api_key"] = api_key  # そのまま保持したいなら追加
+        return TypeAdapter(pyd_model).validate_python(data)
     except json.JSONDecodeError as e:
         raise ValidationError(
             _PydanticValidationError.from_exception_data(
                 "JSONDecodeError",
-                [{"loc": (), "msg": f"LLMの出力がJSONとして解析できませんでした: {e!s}", "type": "value_error"}],
+                [{"loc": (), "msg": f"LLMの出力がJSONとして解析できませんでした: {e}", "type": "value_error"}],
             )
         ) from None
+    except _PydanticValidationError as e:
+        raise ValidationError(e) from None
 
 
-def ask_batch(prompts: list[str], *, output_model: type[Any] | None = None) -> list[Any]:
+# ─────────────────────────────────────────────────────────────
+# パブリック API
+# ─────────────────────────────────────────────────────────────
+def ask(prompt: str, *, output_model: Type[Any] | None = None) -> Any:
     """
-    複数のプロンプトをバッチ処理で実行する。
-
-    Args:
-        prompts: LLMに送信するプロンプトのリスト
-        output_model: 出力の型。未指定の場合は自動推論を試みる。
-
-    Returns:
-        output_model で検証済みのオブジェクトのリスト
-
-    Raises:
-        ValidationError: 型検証に失敗した場合
-        TypeError: 型アノテーションが取得できなかった場合
-        RuntimeError: APIキーが設定されていない場合
+    単一プロンプトを実行し、Pydantic 検証済みオブジェクトを返す。
     """
-    # 型アノテーションの取得
-    model = output_model
-    if model is None:
-        caller_frame = inspect.currentframe().f_back
-        if caller_frame is None:
-            raise TypeError("型アノテーションが取得できませんでした。output_model を指定してください。")
-
-        # ローカル変数の型アノテーションを試す
-        model = infer_output_model_from_locals(caller_frame)
-
-        # 戻り値型アノテーションを試す
-        if model is None:
-            model = infer_output_model_from_return_type(caller_frame)
-
-    if model is None:
-        raise TypeError("型アノテーションが取得できませんでした。output_model を指定してください。")
-
-    # Pydanticモデルを取得
-    pyd_model = get_pydantic_model(model)
-
-    # APIキーを取得
+    pyd_model = _resolve_model(output_model)
     api_key = get_api_key()
 
-    # 各プロンプトに対してLLM APIを呼び出す
-    results = []
-    for prompt in prompts:
-        response = requests.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": get_model(),
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": f"{pyd_model.model_json_schema()}",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                "response_format": {"type": "json_object"},
-            },
+    raw = _post_to_llm(
+        [
+            {"role": "system", "content": f"{pyd_model.model_json_schema()}"},
+            {"role": "user", "content": prompt},
+        ]
+    )
+    return _parse_and_validate(raw, pyd_model, api_key=api_key)
+
+
+def ask_batch(prompts: List[str], *, output_model: Type[Any] | None = None) -> List[Any]:
+    """
+    複数プロンプトをバッチ処理し、検証済みオブジェクトをリストで返す。
+    """
+    pyd_model = _resolve_model(output_model)
+    api_key = get_api_key()
+
+    results: list[Any] = []
+    for p in prompts:
+        raw = _post_to_llm(
+            [
+                {"role": "system", "content": f"{pyd_model.model_json_schema()}"},
+                {"role": "user", "content": p},
+            ]
         )
-
-        if response.status_code != 200:
-            raise RuntimeError(f"LLM API呼び出しに失敗しました: {response.text}")
-
-        try:
-            llm_raw_output = response.json()["choices"][0]["message"]["content"]
-            llm_raw_output = json.loads(llm_raw_output)
-            llm_raw_output["api_key"] = api_key  # APIキーを追加
-            result = TypeAdapter(model).validate_python(llm_raw_output)
-            results.append(result)
-        except _PydanticValidationError as e:
-            raise ValidationError(e) from None
-        except json.JSONDecodeError as e:
-            raise ValidationError(
-                _PydanticValidationError.from_exception_data(
-                    "JSONDecodeError",
-                    [{"loc": (), "msg": f"LLMの出力がJSONとして解析できませんでした: {e!s}", "type": "value_error"}],
-                )
-            ) from None
-
+        results.append(_parse_and_validate(raw, pyd_model, api_key=api_key))
     return results

@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+import logging
 
 from dariko import ask, ask_batch, configure
 
@@ -15,12 +16,8 @@ class Person(BaseModel):
 
 
 prompt = "以下の形式のJSONを返してください:\n" + '{"name": "山田太郎", "age": 25, "dummy": false}'
-result: Person = None
-result = ask(prompt)
+result: Person = ask(prompt)
 print(result)
-
-# result: Person = ask(prompt)
-# print(result)
 
 # バッチ処理
 prompts = [
