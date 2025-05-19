@@ -25,9 +25,10 @@ def mock_llm_response(*args, **kwargs):
     class MockResponse:
         def __init__(self):
             self.status_code = 200
+            current_key = os.getenv("DARIKO_API_KEY", "test_key")
             self._json = {
                 "choices": [
-                    {"message": {"content": '{"name": "test", "age": 20, "dummy": true, "api_key": "test_key"}'}}
+                    {"message": {"content": f'{{"name": "test", "age": 20, "dummy": true, "api_key": "{current_key}"}}'}}
                 ]
             }
 

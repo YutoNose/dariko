@@ -21,10 +21,9 @@ def configure(model: str = "gpt-3.5-turbo") -> None:
     """
     global _API_KEY, _MODEL
     env_key = os.getenv("DARIKO_API_KEY")
-    if env_key is not None:
-        _API_KEY = env_key
-    else:
+    if env_key is None:
         raise RuntimeError("APIキーが設定されていません。環境変数 DARIKO_API_KEY を設定してください。")
+    _API_KEY = env_key
     _MODEL = model
 
 
