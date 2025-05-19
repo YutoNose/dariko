@@ -1,9 +1,9 @@
 from pydantic import BaseModel
 
-from dariko import ask_batch, configure
+from dariko import ask, ask_batch, configure
 
 # APIキーの設定(環境変数から取得)
-configure(model="gpt-3.5-turbo")
+configure(model="gpt-4o-mini")
 
 
 # 出力モデルの定義
@@ -14,11 +14,20 @@ class Person(BaseModel):
     api_key: str
 
 
+prompt = "以下の形式のJSONを返してください:\n" + '{"name": "山田太郎", "age": 25, "dummy": false}'
+result: Person = None
+result = ask(prompt)
+print(result)
+
+# result: Person = ask(prompt)
+# print(result)
+
 # バッチ処理
 prompts = [
     "以下の形式のJSONを返してください:\n" + '{"name": "山田太郎", "age": 25, "dummy": false}',
     "以下の形式のJSONを返してください:\n" + '{"name": "佐藤花子", "age": 30, "dummy": true}',
 ]
+
 
 results = ask_batch(prompts, output_model=Person)
 
