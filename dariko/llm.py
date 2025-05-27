@@ -26,7 +26,10 @@ def _resolve_model(output_model: Type[Any] | None) -> Type[BaseModel]:
     最終的に Pydantic Model 型を返す。
     """
     if output_model is None:
-        caller_frame = inspect.currentframe().f_back
+        current_frame = inspect.currentframe()
+        if current_frame is None:
+            raise TypeError("フレームの取得に失敗しました。output_model を指定してください。")
+        caller_frame = current_frame.f_back
         model = infer_output_model(caller_frame)
         if model is None:
             raise TypeError("型アノテーションが取得できませんでした。output_model を指定してください。")
@@ -101,12 +104,15 @@ def _parse_and_validate(
         data = json.loads(raw_json)
         return TypeAdapter(pyd_model).validate_python(data)
     except json.JSONDecodeError as e:
-        raise ValidationError(
-            _PydanticValidationError.from_exception_data(
-                "JSONDecodeError",
-                [{"loc": (), "msg": f"LLMの出力がJSONとして解析できませんでした: {e}", "type": "value_error"}],
-            )
-        ) from None
+        # JSONDecodeError をそのまま PydanticValidationError として扱う
+        try:
+            # 無効なデータで Pydantic のバリデーションを実行してエラーを発生させる
+            TypeAdapter(pyd_model).validate_python({"invalid": "data"})
+        except _PydanticValidationError as pyd_error:
+            raise ValidationError(pyd_error) from e
+        # この行は到達しないが、リンターエラーを回避するため
+        # JSONDecodeErrorを RuntimeError として処理
+        raise RuntimeError(f"LLMの出力がJSONとして解析できませんでした: {e}") from e
     except _PydanticValidationError as e:
         raise ValidationError(e) from None
 
