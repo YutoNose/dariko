@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from dariko import ask, ask_batch, configure
 
 # APIキーの設定(環境変数から取得)
-configure(model="gpt-4o-mini")
+configure(model="gemma-3-27b-it")  # 環境変数 DARIKO_API_KEY から自動的に取得
 
 
 # 出力モデルの定義
@@ -15,7 +15,7 @@ class Person(BaseModel):
 
 
 prompt = "以下の形式のJSONを返してください:\n" + '{"name": "山田太郎", "age": 25, "dummy": false}'
-result: Person = ask(prompt)
+result: Person = ask(prompt, model_api_import_name="gemini")
 print(result)
 
 # バッチ処理
@@ -25,7 +25,7 @@ prompts = [
 ]
 
 
-results = ask_batch(prompts, output_model=Person)
+results = ask_batch(prompts, model_api_import_name="gemini", output_model=Person)
 
 # 結果の表示
 for i, result in enumerate(results, 1):

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import re
 from typing import Any, List, Type
 
 import requests
@@ -17,7 +18,7 @@ from .model_utils import get_pydantic_model, infer_output_model
 # 内部ユーティリティ
 # ─────────────────────────────────────────────────────────────
 _OPENAI_URL = "https://api.openai.com/v1/chat/completions"
-_GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+_GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
 
 def _resolve_model(output_model: Type[Any] | None) -> Type[BaseModel]:
@@ -73,22 +74,57 @@ def _post_to_llm(messages: list[dict[str, str]], model_api_import_name: str) -> 
             raise RuntimeError(f"LLM API呼び出しに失敗しました: {r.text}")
         return r.json()["choices"][0]["message"]["content"]
     elif model_api_import_name == "gemini":
+        # Gemini APIの正しい形式
+        model_name = get_model()
+        url = _GEMINI_URL.format(model=model_name)
+        
+        # MessagesをGemini API形式に変換
+        contents = []
+        for msg in messages:
+            if msg["role"] == "system":
+                # systemメッセージはuserメッセージとして扱う
+                contents.append({
+                    "role": "user",
+                    "parts": [{"text": f"System: {msg['content']}"}]
+                })
+            else:
+                contents.append({
+                    "role": msg["role"],
+                    "parts": [{"text": msg["content"]}]
+                })
+        
         r = requests.post(
-            _GEMINI_URL,
+            f"{url}?key={api_key}",
             headers={
-                "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
             },
             json={
-                "model": get_model(),
-                "messages": messages,
-                "response_format": {"type": "json_object"},
+                "contents": contents,
+                "generationConfig": {
+                    "temperature": 0.1,
+                    "candidateCount": 1,
+                    "maxOutputTokens": 2048,
+                }
             },
             timeout=30,
         )
         if r.status_code != 200:
-            raise RuntimeError(f"LLM API呼び出しに失敗しました: {r.text}")
-        return r.json()["candidates"][0]["content"]["parts"][0]["text"]
+            raise RuntimeError(f"Gemini API呼び出しに失敗しました: {r.status_code} - {r.text}")
+        
+        response = r.json()
+        if "candidates" not in response or not response["candidates"]:
+            raise RuntimeError(f"Gemini APIレスポンスが不正です: {response}")
+        
+        raw_text = response["candidates"][0]["content"]["parts"][0]["text"]
+        
+        # Geminiが返すテキストからJSON部分を抽出
+        # マークダウンのコードブロックや余分なテキストを除去
+        json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
+        if json_match:
+            return json_match.group(0)
+        else:
+            # JSONが見つからない場合はそのまま返す
+            return raw_text
     else:
         raise RuntimeError(f"モデルのapi呼び出しもとがなにかを確認してください。: {model_api_import_name}")
 
@@ -104,6 +140,10 @@ def _parse_and_validate(
         data = json.loads(raw_json)
         return TypeAdapter(pyd_model).validate_python(data)
     except json.JSONDecodeError as e:
+        # デバッグのために実際のレスポンス内容を表示
+        print(f"デバッグ: LLMからの生レスポンス: {raw_json}")
+        print(f"デバッグ: JSONDecodeError: {e}")
+        
         # JSONDecodeError をそのまま PydanticValidationError として扱う
         try:
             # 無効なデータで Pydantic のバリデーションを実行してエラーを発生させる
