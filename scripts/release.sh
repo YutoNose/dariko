@@ -59,7 +59,16 @@ git checkout -b "$BRANCH_NAME"
 
 # 変更をステージング
 echo -e "${GREEN}変更をステージングしています...${NC}"
-git add .
+# ルートディレクトリに移動
+cd "$(git rev-parse --show-toplevel)"
+# 全ての変更をステージング
+git add -A
+
+# 変更があるか確認
+if git diff --cached --quiet; then
+    echo -e "${RED}ステージングする変更がありません${NC}"
+    exit 1
+fi
 
 # コミット
 echo -e "${GREEN}コミットを作成しています...${NC}"

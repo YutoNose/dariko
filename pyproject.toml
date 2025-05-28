@@ -78,3 +78,12 @@ develop = [
     "pre-commit",
     "dotenv"
 ]
+
+[tool.semantic_release]
+version_variable = ["pyproject.toml:version"]
+commit_message = "{version}\n\n{changelog}"
+branch = "main"
+upload_to_pypi = true
+upload_to_release = true
+changelog_sections = ["feature", "fix", "breaking"]
+commit_parser = "angular"
