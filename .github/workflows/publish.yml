@@ -14,53 +14,53 @@ jobs:
       id-token: write
 
     steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
-    - name: Install uv
-      run: |
-        curl -LsSf https://astral.sh/uv/install.sh | sh
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
 
-    - name: Create and activate virtual environment
-      run: |
-        uv venv
-        echo "$(pwd)/.venv/bin" >> $GITHUB_PATH
+      - name: Create and activate virtual environment
+        run: |
+          uv venv
+          echo "$(pwd)/.venv/bin" >> $GITHUB_PATH
 
-    - name: Install dependencies
-      run: |
-        uv pip install -e .
-        uv pip install build twine python-semantic-release
+      - name: Install dependencies
+        run: |
+          uv pip install -e .
+          uv pip install build twine python-semantic-release
 
-    - name: Configure Git
-      run: |
-        git config --global user.name 'github-actions[bot]'
-        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+      - name: Configure Git
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
-    - name: Release with semantic-release
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
-      run: |
-        semantic-release version
-        semantic-release publish
+      - name: Release with semantic-release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          semantic-release version
+          semantic-release publish
 
-    - name: Fallback - Direct PyPI upload if semantic-release failed
-      if: failure()
-      env:
-        TWINE_USERNAME: __token__
-        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-      run: |
-        echo "semantic-release failed, trying direct upload..."
-        
-        # バージョンを強制的に上げる（既存バージョンとの競合回避）
-        python -c "
+      - name: Fallback - Direct PyPI upload if semantic-release failed
+        if: failure()
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          echo "semantic-release failed, trying direct upload..."
+          
+          # バージョンを強制的に上げる（既存バージョンとの競合回避）
+          python -c "
 import re
 with open('pyproject.toml', 'r') as f:
     content = f.read()
@@ -73,26 +73,26 @@ if version_match:
         f.write(new_content)
     print(f'Version bumped to {new_version}')
 "
-        
-        # ビルドして直接アップロード
-        python -m build
-        twine upload dist/* --verbose
-        
-        # バージョン変更をコミット
-        git add pyproject.toml
-        git commit -m "chore: bump version for PyPI upload"
-        git push
+          
+          # ビルドして直接アップロード
+          python -m build
+          twine upload dist/* --verbose
+          
+          # バージョン変更をコミット
+          git add pyproject.toml
+          git commit -m "chore: bump version for PyPI upload"
+          git push
 
-    - name: Force PyPI upload (manual trigger)
-      if: github.event_name == 'workflow_dispatch'
-      env:
-        TWINE_USERNAME: __token__
-        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-      run: |
-        echo "Manual PyPI upload triggered..."
-        
-        # 現在のバージョンを取得してインクリメント
-        python -c "
+      - name: Force PyPI upload (manual trigger)
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          echo "Manual PyPI upload triggered..."
+          
+          # 現在のバージョンを取得してインクリメント
+          python -c "
 import re
 with open('pyproject.toml', 'r') as f:
     content = f.read()
@@ -105,10 +105,10 @@ if version_match:
         f.write(new_content)
     print(f'Manual version bump to {new_version}')
 "
-        
-        python -m build
-        twine upload dist/* --verbose --skip-existing
-        
-        git add pyproject.toml
-        git commit -m "chore: manual version bump"
-        git push
+          
+          python -m build
+          twine upload dist/* --verbose --skip-existing
+          
+          git add pyproject.toml
+          git commit -m "chore: manual version bump"
+          git push
