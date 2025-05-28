@@ -49,6 +49,12 @@ else
     COMMIT_MESSAGE="$TYPE: $message"
 fi
 
+# プッシュとPRの作成を選択
+echo -e "${YELLOW}プッシュとPRの作成を行いますか？${NC}"
+echo "1) はい"
+echo "2) いいえ（コミットのみ）"
+read -p "選択 (1-2): " push_choice
+
 # ブランチ名の生成（コミットメッセージから）
 BRANCH_NAME=$(echo "$message" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/-*$//')
 BRANCH_NAME="${TYPE}/${BRANCH_NAME}"
@@ -74,15 +80,16 @@ fi
 echo -e "${GREEN}コミットを作成しています...${NC}"
 git commit -m "$COMMIT_MESSAGE"
 
-# プッシュ
-echo -e "${GREEN}変更をプッシュしています...${NC}"
-git push origin "$BRANCH_NAME"
+if [ "$push_choice" = "1" ]; then
+    # プッシュ
+    echo -e "${GREEN}変更をプッシュしています...${NC}"
+    git push origin "$BRANCH_NAME"
 
-# プルリクエストの作成
-echo -e "${GREEN}プルリクエストを作成しています...${NC}"
+    # プルリクエストの作成
+    echo -e "${GREEN}プルリクエストを作成しています...${NC}"
 
-# PRの説明文を生成
-PR_BODY="## 変更内容
+    # PRの説明文を生成
+    PR_BODY="## 変更内容
 
 $message
 
@@ -100,26 +107,47 @@ $(if [ "$IS_BREAKING" = true ]; then echo -e "\n## 破壊的変更\n\n$breaking_
 - 複数のコミットがある場合、最も大きな変更が適用されます
 - コミットメッセージは[Angularのコミットメッセージ規約](https://www.conventionalcommits.org/ja/v1.0.0/)に従ってください"
 
-# GitHub CLIが利用可能かチェック
-if command -v gh &> /dev/null; then
-    gh pr create \
-      --title "$COMMIT_MESSAGE" \
-      --body "$PR_BODY" \
-      --base main
-else
-    echo -e "${YELLOW}GitHub CLI (gh) がインストールされていません。${NC}"
-    echo -e "${YELLOW}以下のコマンドでインストールしてください：${NC}"
-    echo -e "${BLUE}brew install gh${NC}"
-    echo -e "${YELLOW}インストール後、以下のコマンドで認証してください：${NC}"
-    echo -e "${BLUE}gh auth login${NC}"
-    echo -e "\n${YELLOW}または、以下のURLから手動でプルリクエストを作成してください：${NC}"
-    echo -e "${BLUE}https://github.com/YutoNose/dariko/compare/main...${BRANCH_NAME}${NC}"
-    echo -e "\n${YELLOW}プルリクエストの説明：${NC}"
-    echo -e "$PR_BODY"
-fi
+    # GitHub CLIが利用可能かチェック
+    if command -v gh &> /dev/null; then
+        gh pr create \
+          --title "$COMMIT_MESSAGE" \
+          --body "$PR_BODY" \
+          --base main
+    else
+        echo -e "${YELLOW}GitHub CLI (gh) がインストールされていません。${NC}"
+        echo -e "${YELLOW}以下のコマンドでインストールしてください：${NC}"
+        echo -e "${BLUE}brew install gh${NC}"
+        echo -e "${YELLOW}インストール後、以下のコマンドで認証してください：${NC}"
+        echo -e "${BLUE}gh auth login${NC}"
+        echo -e "\n${YELLOW}または、以下のURLから手動でプルリクエストを作成してください：${NC}"
+        echo -e "${BLUE}https://github.com/YutoNose/dariko/compare/main...${BRANCH_NAME}${NC}"
+        echo -e "\n${YELLOW}プルリクエストの説明：${NC}"
+        echo -e "$PR_BODY"
+    fi
 
-echo -e "${GREEN}完了しました！${NC}"
-echo -e "コミットメッセージ:\n${YELLOW}$COMMIT_MESSAGE${NC}"
-echo -e "${GREEN}プルリクエストが作成されました。レビュー後にマージしてください。${NC}"
-echo -e "${BLUE}注意: このPRに他のコミットを追加する場合は、コミットメッセージの規約に従ってください。${NC}"
-echo -e "${GREEN}マージされると、GitHub Actionsが自動的にバージョン管理とリリースを行います。${NC}" 
+    echo -e "${GREEN}完了しました！${NC}"
+    echo -e "コミットメッセージ:\n${YELLOW}$COMMIT_MESSAGE${NC}"
+    echo -e "${GREEN}プルリクエストが作成されました。レビュー後にマージしてください。${NC}"
+    echo -e "${BLUE}注意: このPRに他のコミットを追加する場合は、コミットメッセージの規約に従ってください。${NC}"
+    echo -e "${GREEN}マージされると、GitHub Actionsが自動的にバージョン管理とリリースを行います。${NC}"
+else
+    echo -e "${GREEN}コミットが完了しました。${NC}"
+    echo -e "コミットメッセージ:\n${YELLOW}$COMMIT_MESSAGE${NC}"
+fi
+        echo -e "${YELLOW}インストール後、以下のコマンドで認証してください：${NC}"
+        echo -e "${BLUE}gh auth login${NC}"
+        echo -e "\n${YELLOW}または、以下のURLから手動でプルリクエストを作成してください：${NC}"
+        echo -e "${BLUE}https://github.com/YutoNose/dariko/compare/main...${BRANCH_NAME}${NC}"
+        echo -e "\n${YELLOW}プルリクエストの説明：${NC}"
+        echo -e "$PR_BODY"
+    fi
+
+    echo -e "${GREEN}完了しました！${NC}"
+    echo -e "コミットメッセージ:\n${YELLOW}$COMMIT_MESSAGE${NC}"
+    echo -e "${GREEN}プルリクエストが作成されました。レビュー後にマージしてください。${NC}"
+    echo -e "${BLUE}注意: このPRに他のコミットを追加する場合は、コミットメッセージの規約に従ってください。${NC}"
+    echo -e "${GREEN}マージされると、GitHub Actionsが自動的にバージョン管理とリリースを行います。${NC}" 
+else
+    echo -e "${GREEN}完了しました！${NC}"
+    echo -e "コミットメッセージ:\n${YELLOW}$COMMIT_MESSAGE${NC}"
+fi 
