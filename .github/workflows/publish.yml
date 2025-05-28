@@ -1,16 +1,17 @@
-name: Debug PyPI Publication
+name: Publish to PyPI
 
 on:
   push:
     branches: [ main ]
 
 jobs:
-  debug:
+  publish:
     runs-on: ubuntu-latest
     permissions:
       contents: write
       issues: write
       pull-requests: write
+      id-token: write  # PyPIの信頼できる発行者のために追加
 
     steps:
     - uses: actions/checkout@v4
@@ -42,45 +43,20 @@ jobs:
         git config --global user.name 'github-actions[bot]'
         git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
-    - name: Debug - Show current directory structure
+    - name: Create CHANGELOG.md if it doesn't exist
       run: |
-        echo "=== Current directory structure ==="
-        ls -la
-        echo "=== pyproject.toml content ==="
-        cat pyproject.toml
-        echo "=== Git status ==="
-        git status
-        echo "=== Git log (last 5 commits) ==="
-        git log --oneline -5
+        if [ ! -f CHANGELOG.md ]; then
+          echo "# Changelog" > CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "All notable changes to this project will be documented in this file." >> CHANGELOG.md
+          git add CHANGELOG.md
+          git commit -m "chore: add initial CHANGELOG.md" || true
+        fi
 
-    - name: Debug - Test semantic-release dry-run
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        echo "=== Testing semantic-release dry-run ==="
-        semantic-release --dry-run --verbosity DEBUG
-
-    - name: Debug - Show semantic-release version and config
-      run: |
-        echo "=== Semantic-release version ==="
-        semantic-release --version
-        echo "=== Python version ==="
-        python --version
-        echo "=== Installed packages ==="
-        pip list | grep -E "(semantic|release|build|twine)"
-
-    - name: Try manual build
-      run: |
-        echo "=== Manual build test ==="
-        python -m build
-        echo "=== Build artifacts ==="
-        ls -la dist/
-
-    - name: Try semantic-release with minimal config
+    - name: Release
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
       run: |
-        echo "=== Attempting semantic-release with minimal config ==="
-        # 最小限の設定でテスト
-        semantic-release version --verbosity DEBUG || echo "Version command failed with exit code $?"
+        # semantic-releaseを一度だけ実行（version と publish を統合）
+        semantic-release --verbosity DEBUG
