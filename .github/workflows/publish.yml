@@ -43,10 +43,72 @@ jobs:
         git config --global user.name 'github-actions[bot]'
         git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
-    - name: Release
+    - name: Release with semantic-release
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
       run: |
         semantic-release version
         semantic-release publish
+
+    - name: Fallback - Direct PyPI upload if semantic-release failed
+      if: failure()
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+      run: |
+        echo "semantic-release failed, trying direct upload..."
+        
+        # バージョンを強制的に上げる（既存バージョンとの競合回避）
+        python -c "
+import re
+with open('pyproject.toml', 'r') as f:
+    content = f.read()
+version_match = re.search(r'version = \"(\d+)\.(\d+)\.(\d+)\"', content)
+if version_match:
+    major, minor, patch = map(int, version_match.groups())
+    new_version = f'{major}.{minor}.{patch + 1}'
+    new_content = re.sub(r'version = \"[\d\.]+\"', f'version = \"{new_version}\"', content)
+    with open('pyproject.toml', 'w') as f:
+        f.write(new_content)
+    print(f'Version bumped to {new_version}')
+"
+        
+        # ビルドして直接アップロード
+        python -m build
+        twine upload dist/* --verbose
+        
+        # バージョン変更をコミット
+        git add pyproject.toml
+        git commit -m "chore: bump version for PyPI upload"
+        git push
+
+    - name: Force PyPI upload (manual trigger)
+      if: github.event_name == 'workflow_dispatch'
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+      run: |
+        echo "Manual PyPI upload triggered..."
+        
+        # 現在のバージョンを取得してインクリメント
+        python -c "
+import re
+with open('pyproject.toml', 'r') as f:
+    content = f.read()
+version_match = re.search(r'version = \"(\d+)\.(\d+)\.(\d+)\"', content)
+if version_match:
+    major, minor, patch = map(int, version_match.groups())
+    new_version = f'{major}.{minor}.{patch + 1}'
+    new_content = re.sub(r'version = \"[\d\.]+\"', f'version = \"{new_version}\"', content)
+    with open('pyproject.toml', 'w') as f:
+        f.write(new_content)
+    print(f'Manual version bump to {new_version}')
+"
+        
+        python -m build
+        twine upload dist/* --verbose --skip-existing
+        
+        git add pyproject.toml
+        git commit -m "chore: manual version bump"
+        git push
