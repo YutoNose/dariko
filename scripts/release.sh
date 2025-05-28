@@ -49,38 +49,38 @@ else
     COMMIT_MESSAGE="$TYPE: $message"
 fi
 
-# プッシュとPRの作成を選択
+# プッシュとPRの作成の確認
 echo -e "${YELLOW}プッシュとPRの作成を行いますか？${NC}"
 echo "1) はい"
 echo "2) いいえ（コミットのみ）"
 read -p "選択 (1-2): " push_choice
 
-# ブランチ名の生成（コミットメッセージから）
-BRANCH_NAME=$(echo "$message" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/-*$//')
-BRANCH_NAME="${TYPE}/${BRANCH_NAME}"
-
-# 新しいブランチを作成
-echo -e "${GREEN}新しいブランチを作成しています: ${YELLOW}${BRANCH_NAME}${NC}"
-git checkout -b "$BRANCH_NAME"
-
-# 変更をステージング
-echo -e "${GREEN}変更をステージングしています...${NC}"
-# ルートディレクトリに移動
-cd "$(git rev-parse --show-toplevel)"
-# 全ての変更をステージング
-git add -A
-
-# 変更があるか確認
-if git diff --cached --quiet; then
-    echo -e "${RED}ステージングする変更がありません${NC}"
-    exit 1
-fi
-
-# コミット
-echo -e "${GREEN}コミットを作成しています...${NC}"
-git commit -m "$COMMIT_MESSAGE"
-
 if [ "$push_choice" = "1" ]; then
+    # ブランチ名の生成（コミットメッセージから）
+    BRANCH_NAME=$(echo "$message" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/-*$//')
+    BRANCH_NAME="${TYPE}/${BRANCH_NAME}"
+
+    # 新しいブランチを作成
+    echo -e "${GREEN}新しいブランチを作成しています: ${YELLOW}${BRANCH_NAME}${NC}"
+    git checkout -b "$BRANCH_NAME"
+
+    # 変更をステージング
+    echo -e "${GREEN}変更をステージングしています...${NC}"
+    # ルートディレクトリに移動
+    cd "$(git rev-parse --show-toplevel)"
+    # 全ての変更をステージング
+    git add -A
+
+    # 変更があるか確認
+    if git diff --cached --quiet; then
+        echo -e "${RED}ステージングする変更がありません${NC}"
+        exit 1
+    fi
+
+    # コミット
+    echo -e "${GREEN}コミットを作成しています...${NC}"
+    git commit -m "$COMMIT_MESSAGE"
+
     # プッシュ
     echo -e "${GREEN}変更をプッシュしています...${NC}"
     git push origin "$BRANCH_NAME"
@@ -131,23 +131,9 @@ $(if [ "$IS_BREAKING" = true ]; then echo -e "\n## 破壊的変更\n\n$breaking_
     echo -e "${BLUE}注意: このPRに他のコミットを追加する場合は、コミットメッセージの規約に従ってください。${NC}"
     echo -e "${GREEN}マージされると、GitHub Actionsが自動的にバージョン管理とリリースを行います。${NC}"
 else
+    # コミットのみの場合
+    echo -e "${GREEN}コミットのみを行います...${NC}"
+    git add -A
+    git commit -m "$COMMIT_MESSAGE"
     echo -e "${GREEN}コミットが完了しました。${NC}"
-    echo -e "コミットメッセージ:\n${YELLOW}$COMMIT_MESSAGE${NC}"
-fi
-        echo -e "${YELLOW}インストール後、以下のコマンドで認証してください：${NC}"
-        echo -e "${BLUE}gh auth login${NC}"
-        echo -e "\n${YELLOW}または、以下のURLから手動でプルリクエストを作成してください：${NC}"
-        echo -e "${BLUE}https://github.com/YutoNose/dariko/compare/main...${BRANCH_NAME}${NC}"
-        echo -e "\n${YELLOW}プルリクエストの説明：${NC}"
-        echo -e "$PR_BODY"
-    fi
-
-    echo -e "${GREEN}完了しました！${NC}"
-    echo -e "コミットメッセージ:\n${YELLOW}$COMMIT_MESSAGE${NC}"
-    echo -e "${GREEN}プルリクエストが作成されました。レビュー後にマージしてください。${NC}"
-    echo -e "${BLUE}注意: このPRに他のコミットを追加する場合は、コミットメッセージの規約に従ってください。${NC}"
-    echo -e "${GREEN}マージされると、GitHub Actionsが自動的にバージョン管理とリリースを行います。${NC}" 
-else
-    echo -e "${GREEN}完了しました！${NC}"
-    echo -e "コミットメッセージ:\n${YELLOW}$COMMIT_MESSAGE${NC}"
 fi 
