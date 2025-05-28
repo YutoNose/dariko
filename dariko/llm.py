@@ -4,7 +4,7 @@ from __future__ import annotations
 import inspect
 import json
 import re
-from typing import Any, List, Type
+from typing import Any, List, Literal, Type
 
 import requests
 from pydantic import BaseModel, TypeAdapter
@@ -39,18 +39,6 @@ def _resolve_model(output_model: Type[Any] | None) -> Type[BaseModel]:
     return get_pydantic_model(model)  # 型チェックも兼ねる
 
 
-def _check_model(model_api_import_name: str) -> bool:
-    """
-    モデルのapi呼び出しもとがなにかを確認する。
-    """
-    if model_api_import_name == "openai":
-        return True
-    elif model_api_import_name == "gemini":
-        return True
-    else:
-        return False
-
-
 def _post_to_llm(messages: list[dict[str, str]], model_api_import_name: str) -> str:
     """
     LLM APIを呼び出して content 文字列を返す。
@@ -71,7 +59,7 @@ def _post_to_llm(messages: list[dict[str, str]], model_api_import_name: str) -> 
             timeout=30,
         )
         if r.status_code != 200:
-            raise RuntimeError(f"LLM API呼び出しに失敗しました: {r.text}")
+            raise RuntimeError(f"OpenAI API呼び出しに失敗しました: {r.text}")
         return r.json()["choices"][0]["message"]["content"]
     elif model_api_import_name == "gemini":
         # Gemini APIの正しい形式
@@ -160,7 +148,7 @@ def _parse_and_validate(
 # ─────────────────────────────────────────────────────────────
 # パブリック API
 # ─────────────────────────────────────────────────────────────
-def ask(prompt: str, *,model_api_import_name :str, output_model: Type[Any] | None = None) -> Any:
+def ask(prompt: str, *,model_api_import_name :Literal["openai","gemini"], output_model: Type[Any] | None = None) -> Any:
     """
     単一プロンプトを実行し、Pydantic 検証済みオブジェクトを返す。
     """
@@ -177,12 +165,11 @@ def ask(prompt: str, *,model_api_import_name :str, output_model: Type[Any] | Non
     return _parse_and_validate(raw, pyd_model, api_key=api_key)
 
 
-def ask_batch(prompts: List[str], *, model_api_import_name :str, output_model: Type[Any] | None = None) -> List[Any]:
+def ask_batch(prompts: List[str], *, model_api_import_name :Literal["openai","gemini"], output_model: Type[Any] | None = None) -> List[Any]:
     """
     複数プロンプトをバッチ処理し、検証済みオブジェクトをリストで返す。
     """
     pyd_model = _resolve_model(output_model)
-    model_check = _check_model(model_api_import_name)
     api_key = get_api_key()
 
     results: list[Any] = []
