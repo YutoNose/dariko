@@ -71,9 +71,9 @@ git push origin "$BRANCH_NAME"
 
 # プルリクエストの作成
 echo -e "${GREEN}プルリクエストを作成しています...${NC}"
-gh pr create \
-  --title "$COMMIT_MESSAGE" \
-  --body "## 変更内容
+
+# PRの説明文を生成
+PR_BODY="## 変更内容
 
 $message
 
@@ -89,8 +89,25 @@ $(if [ "$IS_BREAKING" = true ]; then echo -e "\n## 破壊的変更\n\n$breaking_
   - \`fix:\` → パッチバージョンアップ（0.1.0 → 0.1.1）
   - \`BREAKING CHANGE:\` → メジャーバージョンアップ（0.1.0 → 1.0.0）
 - 複数のコミットがある場合、最も大きな変更が適用されます
-- コミットメッセージは[Angularのコミットメッセージ規約](https://www.conventionalcommits.org/ja/v1.0.0/)に従ってください" \
-  --base main
+- コミットメッセージは[Angularのコミットメッセージ規約](https://www.conventionalcommits.org/ja/v1.0.0/)に従ってください"
+
+# GitHub CLIが利用可能かチェック
+if command -v gh &> /dev/null; then
+    gh pr create \
+      --title "$COMMIT_MESSAGE" \
+      --body "$PR_BODY" \
+      --base main
+else
+    echo -e "${YELLOW}GitHub CLI (gh) がインストールされていません。${NC}"
+    echo -e "${YELLOW}以下のコマンドでインストールしてください：${NC}"
+    echo -e "${BLUE}brew install gh${NC}"
+    echo -e "${YELLOW}インストール後、以下のコマンドで認証してください：${NC}"
+    echo -e "${BLUE}gh auth login${NC}"
+    echo -e "\n${YELLOW}または、以下のURLから手動でプルリクエストを作成してください：${NC}"
+    echo -e "${BLUE}https://github.com/YutoNose/dariko/compare/main...${BRANCH_NAME}${NC}"
+    echo -e "\n${YELLOW}プルリクエストの説明：${NC}"
+    echo -e "$PR_BODY"
+fi
 
 echo -e "${GREEN}完了しました！${NC}"
 echo -e "コミットメッセージ:\n${YELLOW}$COMMIT_MESSAGE${NC}"
