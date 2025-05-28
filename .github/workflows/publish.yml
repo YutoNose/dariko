@@ -11,7 +11,7 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
-      id-token: write  # PyPIの信頼できる発行者のために追加
+      id-token: write
 
     steps:
     - uses: actions/checkout@v4
@@ -43,20 +43,10 @@ jobs:
         git config --global user.name 'github-actions[bot]'
         git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
-    - name: Create CHANGELOG.md if it doesn't exist
-      run: |
-        if [ ! -f CHANGELOG.md ]; then
-          echo "# Changelog" > CHANGELOG.md
-          echo "" >> CHANGELOG.md
-          echo "All notable changes to this project will be documented in this file." >> CHANGELOG.md
-          git add CHANGELOG.md
-          git commit -m "chore: add initial CHANGELOG.md" || true
-        fi
-
     - name: Release
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
       run: |
-        # semantic-releaseを一度だけ実行（version と publish を統合）
-        semantic-release --verbosity DEBUG
+        semantic-release version
+        semantic-release publish
