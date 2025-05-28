@@ -14,7 +14,7 @@ _MODEL: str = "gpt-3.5-turbo"  # デフォルトモデル
 
 def configure(model: str = "gpt-3.5-turbo") -> None:
     """
-    dariko の設定を行う。
+    dariko の設定を行う
 
     Args:
         model: 使用するLLMモデル名。デフォルトは "gpt-3.5-turbo"
