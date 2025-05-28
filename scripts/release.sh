@@ -10,6 +10,12 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# 変更があるか確認
+if git diff --quiet && git diff --cached --quiet; then
+    echo -e "${RED}変更がありません${NC}"
+    exit 1
+fi
+
 # コミットタイプの選択
 echo -e "${YELLOW}コミットタイプを選択してください:${NC}"
 echo "1) feat: 新機能"
