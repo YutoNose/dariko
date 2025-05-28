@@ -87,5 +87,5 @@ upload_to_pypi = true
 upload_to_release = true
 changelog_sections = ["feature", "fix", "breaking"]
 commit_parser = "conventional"
-changelog = { path = "CHANGELOG.md" }
+changelog = { path = "CHANGELOG.md", sections = ["feature", "fix", "breaking"] }
 build_command = "python -m build"
