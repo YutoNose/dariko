@@ -1,6 +1,6 @@
 [project]
 name = "dariko"
-version = "1.0.3"
+version = "1.0.4"
 description = "LLMの出力をPydanticモデルで型安全に扱うためのPythonライブラリ"
 readme = "README.md"
 requires-python = ">=3.8"
