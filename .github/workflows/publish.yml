@@ -63,18 +63,17 @@ jobs:
         echo "Uploading to PyPI with twine..."
         twine upload dist/* --verbose
 
-    - name: Get current version
-      id: get_version
-      run: |
-        VERSION=$(python -c "import re; content=open('pyproject.toml').read(); print(re.search(r'version = \"([^\"]+)\"', content).group(1))")
-        echo "version=$VERSION" >> $GITHUB_OUTPUT
-
     - name: Create GitHub Release
-      uses: actions/create-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: v${{ steps.get_version.outputs.version }}
-        release_name: Release v${{ steps.get_version.outputs.version }}
-        draft: false
-        prerelease: false
+      run: |
+        # 現在のバージョンを取得
+        VERSION=$(python -c "import re; content=open('pyproject.toml').read(); print(re.search(r'version = \"([^\"]+)\"', content).group(1))")
+        
+        # 既存のリリースがあるかチェック
+        if gh release view "v$VERSION" >/dev/null 2>&1; then
+          echo "Release v$VERSION already exists, skipping..."
+        else
+          echo "Creating GitHub release for v$VERSION..."
+          gh release create "v$VERSION" --title "Release v$VERSION" --notes "Automated release v$VERSION"
+        fi
