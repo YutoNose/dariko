@@ -1,0 +1,79 @@
+name: Publish to PyPI
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      id-token: write
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install uv
+      run: |
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+
+    - name: Create and activate virtual environment
+      run: |
+        uv venv
+        echo "$(pwd)/.venv/bin" >> $GITHUB_PATH
+
+    - name: Install dependencies
+      run: |
+        uv pip install -e .
+        uv pip install build twine python-semantic-release
+
+    - name: Configure Git
+      run: |
+        git config --global user.name 'github-actions[bot]'
+        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+    - name: Update version with semantic-release
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        semantic-release version
+
+    - name: Build package
+      run: |
+        python -m build
+        ls -la dist/
+
+    - name: Upload to PyPI with twine
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+      run: |
+        echo "Uploading to PyPI with twine..."
+        twine upload dist/* --verbose
+
+    - name: Create GitHub Release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # 現在のバージョンを取得
+        VERSION=$(python -c "import re; content=open('pyproject.toml').read(); print(re.search(r'version = \"([^\"]+)\"', content).group(1))")
+        
+        # 既存のリリースがあるかチェック
+        if gh release view "v$VERSION" >/dev/null 2>&1; then
+          echo "Release v$VERSION already exists, skipping..."
+        else
+          echo "Creating GitHub release for v$VERSION..."
+          gh release create "v$VERSION" --title "Release v$VERSION" --notes "Automated release v$VERSION"
+        fi

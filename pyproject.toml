@@ -1,6 +1,6 @@
 [project]
 name = "dariko"
-version = "0.3.2"
+version = "1.0.5"
 description = "LLMの出力をPydanticモデルで型安全に扱うためのPythonライブラリ"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -78,3 +78,27 @@ develop = [
     "pre-commit",
     "dotenv"
 ]
+
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+build_command = "python -m build"
+dist_path = "dist/"
+upload_to_pypi = true
+upload_to_release = true
+commit_subject = "chore(release): v{version}"
+
+[tool.semantic_release.branches.main]
+match = "main"
+prerelease = false
+
+[tool.semantic_release.commit_parser_options]
+allowed_tags = ["feat", "fix", "docs", "style", "refactor", "perf", "test", "build", "ci", "chore"]
+minor_tags = ["feat"]
+patch_tags = ["fix", "perf"]
+
+[tool.semantic_release.remote.token]
+env = "GH_TOKEN"
+
+[tool.semantic_release.publish]
+dist_glob_patterns = ["dist/*"]
+upload_to_vcs_release = true
