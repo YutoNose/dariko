@@ -3,20 +3,20 @@ from __future__ import annotations
 
 import inspect
 import json
-from typing import Any, List, Type
+from typing import Any, List, Literal, Type
 
-import requests
 from pydantic import BaseModel, TypeAdapter
 from pydantic import ValidationError as _PydanticValidationError
 
-from .config import get_api_key, get_model
+from .config import get_api_key
 from .exceptions import ValidationError
 from .model_utils import get_pydantic_model, infer_output_model
+from .models.post_to_openai import post_to_openai
+from .models.post_to_gemini import post_to_gemini
 
 # ─────────────────────────────────────────────────────────────
 # 内部ユーティリティ
 # ─────────────────────────────────────────────────────────────
-_OPENAI_URL = "https://api.openai.com/v1/chat/completions"
 
 
 def _resolve_model(output_model: Type[Any] | None) -> Type[BaseModel]:
@@ -25,36 +25,34 @@ def _resolve_model(output_model: Type[Any] | None) -> Type[BaseModel]:
     最終的に Pydantic Model 型を返す。
     """
     if output_model is None:
-        caller_frame = inspect.currentframe().f_back
+        current_frame = inspect.currentframe()
+        if current_frame is None:
+            raise TypeError(
+                "フレームの取得に失敗しました。output_model を指定してください。"
+            )
+        caller_frame = current_frame.f_back
         model = infer_output_model(caller_frame)
         if model is None:
-            raise TypeError("型アノテーションが取得できませんでした。output_model を指定してください。")
+            raise TypeError(
+                "型アノテーションが取得できませんでした。output_model を指定してください。"
+            )
     else:
         model = output_model
     return get_pydantic_model(model)  # 型チェックも兼ねる
 
 
-def _post_to_llm(messages: list[dict[str, str]]) -> str:
+def _post_to_llm(messages: list[dict[str, str]], model_api_import_name: str) -> str:
     """
-    OpenAI ChatCompletion を呼び出して content 文字列を返す。
+    LLM APIを呼び出して content 文字列を返す。
     """
-    api_key = get_api_key()
-    r = requests.post(
-        _OPENAI_URL,
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        json={
-            "model": get_model(),
-            "messages": messages,
-            "response_format": {"type": "json_object"},
-        },
-        timeout=30,
-    )
-    if r.status_code != 200:
-        raise RuntimeError(f"LLM API呼び出しに失敗しました: {r.text}")
-    return r.json()["choices"][0]["message"]["content"]
+    if model_api_import_name == "openai":
+        return post_to_openai(messages)
+    elif model_api_import_name == "gemini":
+        return post_to_gemini(messages)
+    else:
+        raise RuntimeError(
+            f"モデルのapi呼び出しもとがなにかを確認してください。: {model_api_import_name}"
+        )
 
 
 def _parse_and_validate(
@@ -68,12 +66,19 @@ def _parse_and_validate(
         data = json.loads(raw_json)
         return TypeAdapter(pyd_model).validate_python(data)
     except json.JSONDecodeError as e:
-        raise ValidationError(
-            _PydanticValidationError.from_exception_data(
-                "JSONDecodeError",
-                [{"loc": (), "msg": f"LLMの出力がJSONとして解析できませんでした: {e}", "type": "value_error"}],
-            )
-        ) from None
+        # デバッグのために実際のレスポンス内容を表示
+        print(f"デバッグ: LLMからの生レスポンス: {raw_json}")
+        print(f"デバッグ: JSONDecodeError: {e}")
+
+        # JSONDecodeError をそのまま PydanticValidationError として扱う
+        try:
+            # 無効なデータで Pydantic のバリデーションを実行してエラーを発生させる
+            TypeAdapter(pyd_model).validate_python({"invalid": "data"})
+        except _PydanticValidationError as pyd_error:
+            raise ValidationError(pyd_error) from e
+        # この行は到達しないが、リンターエラーを回避するため
+        # JSONDecodeErrorを RuntimeError として処理
+        raise RuntimeError(f"LLMの出力がJSONとして解析できませんでした: {e}") from e
     except _PydanticValidationError as e:
         raise ValidationError(e) from None
 
@@ -81,7 +86,12 @@ def _parse_and_validate(
 # ─────────────────────────────────────────────────────────────
 # パブリック API
 # ─────────────────────────────────────────────────────────────
-def ask(prompt: str, *, output_model: Type[Any] | None = None) -> Any:
+def ask(
+    prompt: str,
+    *,
+    model_api_import_name: Literal["openai", "gemini"],
+    output_model: Type[Any] | None = None,
+) -> Any:
     """
     単一プロンプトを実行し、Pydantic 検証済みオブジェクトを返す。
     """
@@ -92,12 +102,18 @@ def ask(prompt: str, *, output_model: Type[Any] | None = None) -> Any:
         [
             {"role": "system", "content": f"{pyd_model.model_json_schema()}"},
             {"role": "user", "content": prompt},
-        ]
+        ],
+        model_api_import_name,
     )
     return _parse_and_validate(raw, pyd_model, api_key=api_key)
 
 
-def ask_batch(prompts: List[str], *, output_model: Type[Any] | None = None) -> List[Any]:
+def ask_batch(
+    prompts: List[str],
+    *,
+    model_api_import_name: Literal["openai", "gemini"],
+    output_model: Type[Any] | None = None,
+) -> List[Any]:
     """
     複数プロンプトをバッチ処理し、検証済みオブジェクトをリストで返す。
     """
@@ -110,7 +126,8 @@ def ask_batch(prompts: List[str], *, output_model: Type[Any] | None = None) -> L
             [
                 {"role": "system", "content": f"{pyd_model.model_json_schema()}"},
                 {"role": "user", "content": p},
-            ]
+            ],
+            model_api_import_name,
         )
         results.append(_parse_and_validate(raw, pyd_model, api_key=api_key))
     return results

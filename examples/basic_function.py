@@ -16,6 +16,7 @@ def get_person_info() -> Person:
     """人物情報を取得する関数"""
     return ask(
         '以下の形式のJSONを返してください:\n{"name": "山田太郎", "age": 25, "dummy": false}',
+        model_api_import_name="openai",
         output_model=Person
     )
 

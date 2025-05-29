@@ -2,8 +2,10 @@ from pydantic import BaseModel
 
 from dariko import ask, ask_batch, configure
 
+
+# APIキーの設定
 # Configure API key (retrieved from environment variables)
-configure(model="gpt-4o-mini")
+configure(model="gemma-3-27b-it")
 
 
 # Define output model
@@ -14,7 +16,8 @@ class Person(BaseModel):
 
 
 prompt = "Please return JSON in the following format:\n" + '{"name": "山田太郎", "age": 25, "dummy": false}'
-result: Person = ask(prompt)
+result: Person = ask(prompt, model_api_import_name="gemini")
+
 print(result)
 
 # Batch processing
@@ -24,7 +27,7 @@ prompts = [
 ]
 
 
-results = ask_batch(prompts, output_model=Person)
+results = ask_batch(prompts, model_api_import_name="gemini", output_model=Person)
 
 # Display results
 for i, result in enumerate(results, 1):
