@@ -5,7 +5,7 @@ from dariko import ask, ask_batch, configure
 
 # APIキーの設定
 # Configure API key (retrieved from environment variables)
-configure(model="gpt-4o-mini")
+configure(model="gemma-3-27b-it")
 
 
 # Define output model
@@ -16,7 +16,7 @@ class Person(BaseModel):
 
 
 prompt = "Please return JSON in the following format:\n" + '{"name": "山田太郎", "age": 25, "dummy": false}'
-result: Person = ask(prompt)
+result: Person = ask(prompt, model_api_import_name="gemini")
 
 print(result)
 
