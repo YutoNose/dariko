@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 def _validate(model: Any) -> Type[BaseModel] | None:
     """Pydantic Model かどうかを判定し、list[T] にも対応する。BaseModelそのものは除外。"""
     origin = getattr(model, "__origin__", None)
-    if origin is list:                     # list[T] -> T を取り出す
+    if origin is list:  # list[T] -> T を取り出す
         model = model.__args__[0]
     # BaseModelそのものは除外
     if model is BaseModel:
@@ -55,7 +55,7 @@ def _model_from_ast(frame) -> Type[BaseModel] | None:
                     ann_type_str = ast.unparse(node.returns)
                     logger.debug(f"Found function return type: {ann_type_str}")
                     ann = eval(ann_type_str, caller_frame.f_globals, caller_frame.f_locals)
-                    if (model := _validate(ann)):
+                    if model := _validate(ann):
                         return model
                 except Exception as e:
                     logger.debug(f"Failed to evaluate function return type: {e}")
@@ -73,18 +73,18 @@ def _model_from_ast(frame) -> Type[BaseModel] | None:
                 ann_type_str = ast.unparse(node.annotation)
                 logger.debug(f"Type annotation string: {ann_type_str}")
                 ann = eval(ann_type_str, caller_frame.f_globals, caller_frame.f_locals)
-                if (model := _validate(ann)):
+                if model := _validate(ann):
                     return model
             except Exception as e:
                 logger.debug(f"Failed to evaluate annotation: {e}")
 
         # Assign + type_comment: result = ...  # type: Person
         elif isinstance(node, ast.Assign):
-            if hasattr(node, 'type_comment') and node.type_comment:
+            if hasattr(node, "type_comment") and node.type_comment:
                 logger.debug(f"Found Assign with type_comment at line {node_line}")
                 try:
                     ann = eval(node.type_comment, caller_frame.f_globals, caller_frame.f_locals)
-                    if (model := _validate(ann)):
+                    if model := _validate(ann):
                         return model
                 except Exception as e:
                     logger.debug(f"Failed to evaluate type comment: {e}")
@@ -126,19 +126,17 @@ def infer_output_model(frame=None) -> Type[BaseModel] | None:
             user_frame = stack[-1].frame
 
     frame = user_frame
-    logger.debug(f"Current frame: {frame.f_code.co_name} at line {frame.f_lineno} "
-                 f"in {frame.f_code.co_filename}")
+    logger.debug(f"Current frame: {frame.f_code.co_name} at line {frame.f_lineno} " f"in {frame.f_code.co_filename}")
 
     # 0) 現在実行中の関数 get_person_info() の return 型を調べる
     if frame.f_code.co_name != "<module>":
         try:
             # 関数オブジェクトを frame から解決
-            func_obj = (frame.f_locals.get(frame.f_code.co_name)
-                        or frame.f_globals.get(frame.f_code.co_name))
+            func_obj = frame.f_locals.get(frame.f_code.co_name) or frame.f_globals.get(frame.f_code.co_name)
             if func_obj:
                 return_type = get_type_hints(func_obj).get("return")
                 logger.debug(f"Current func return type: {return_type}")
-                if (model := _validate(return_type)):
+                if model := _validate(return_type):
                     return model
 
             # --- AST fallback ---
@@ -152,7 +150,7 @@ def infer_output_model(frame=None) -> Type[BaseModel] | None:
                         logger.debug(f"AST: current func return annotation: {ann_type_str}")
                         try:
                             ann = eval(ann_type_str, frame.f_globals, frame.f_locals)
-                            if (model := _validate(ann)):
+                            if model := _validate(ann):
                                 return model
                         except Exception as e:
                             logger.debug(f"Failed to evaluate annotation: {e}")

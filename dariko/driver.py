@@ -3,20 +3,29 @@ from __future__ import annotations
 
 import inspect
 import json
-from typing import Any, List, Type
+from typing import Any, List, Type, Dict
 
-import requests
 from pydantic import BaseModel, TypeAdapter
 from pydantic import ValidationError as _PydanticValidationError
 
-from .config import get_api_key, get_model
+from .config import get_llm_key, get_model
 from .exceptions import ValidationError
 from .model_utils import get_pydantic_model, infer_output_model
+from .models.llm import LLM
+from .models.gpt import GPT
+from .models.gemma import Gemma
+from .models.claude import Claude
+
+# モデル名とLLMクラスのマッピング
+MODEL_MAPPING: Dict[str, Type[LLM]] = {
+    "gpt": GPT,
+    "gemma": Gemma,
+    "claude": Claude,
+}
 
 # ─────────────────────────────────────────────────────────────
 # 内部ユーティリティ
 # ─────────────────────────────────────────────────────────────
-_OPENAI_URL = "https://api.openai.com/v1/chat/completions"
 
 
 def _resolve_model(output_model: Type[Any] | None) -> Type[BaseModel]:
@@ -34,32 +43,30 @@ def _resolve_model(output_model: Type[Any] | None) -> Type[BaseModel]:
     return get_pydantic_model(model)  # 型チェックも兼ねる
 
 
+def _get_llm_instance() -> LLM:
+    """
+    設定に基づいて適切なLLMインスタンスを返す
+    """
+    model_name = get_model()
+    llm_key = get_llm_key()
+
+    # モデル名からLLMクラスを特定
+    for prefix, llm_class in MODEL_MAPPING.items():
+        if prefix in model_name.lower():
+            return llm_class.configure(model_name=model_name, llm_key=llm_key)
+
+    raise ValueError(f"Unsupported model: {model_name}")
+
+
 def _post_to_llm(messages: list[dict[str, str]]) -> str:
     """
-    OpenAI ChatCompletion を呼び出して content 文字列を返す。
+    LLMを呼び出して content 文字列を返す。
     """
-    api_key = get_api_key()
-    r = requests.post(
-        _OPENAI_URL,
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        json={
-            "model": get_model(),
-            "messages": messages,
-            "response_format": {"type": "json_object"},
-        },
-        timeout=30,
-    )
-    if r.status_code != 200:
-        raise RuntimeError(f"LLM API呼び出しに失敗しました: {r.text}")
-    return r.json()["choices"][0]["message"]["content"]
+    llm = _get_llm_instance()
+    return llm.call(messages)
 
 
-def _parse_and_validate(
-    raw_json: str, pyd_model: Type[BaseModel], *, api_key: str
-) -> BaseModel:
+def _parse_and_validate(raw_json: str, pyd_model: Type[BaseModel], *, llm_key: str) -> BaseModel:
     """
     LLM 出力(JSON文字列)を parse & Pydantic 検証。
     成功すれば Pydantic モデルのインスタンスを返す。
@@ -86,7 +93,7 @@ def ask(prompt: str, *, output_model: Type[Any] | None = None) -> Any:
     単一プロンプトを実行し、Pydantic 検証済みオブジェクトを返す。
     """
     pyd_model = _resolve_model(output_model)
-    api_key = get_api_key()
+    llm_key = get_llm_key()
 
     raw = _post_to_llm(
         [
@@ -94,7 +101,7 @@ def ask(prompt: str, *, output_model: Type[Any] | None = None) -> Any:
             {"role": "user", "content": prompt},
         ]
     )
-    return _parse_and_validate(raw, pyd_model, api_key=api_key)
+    return _parse_and_validate(raw, pyd_model, llm_key=llm_key)
 
 
 def ask_batch(prompts: List[str], *, output_model: Type[Any] | None = None) -> List[Any]:
@@ -102,7 +109,7 @@ def ask_batch(prompts: List[str], *, output_model: Type[Any] | None = None) -> L
     複数プロンプトをバッチ処理し、検証済みオブジェクトをリストで返す。
     """
     pyd_model = _resolve_model(output_model)
-    api_key = get_api_key()
+    llm_key = get_llm_key()
 
     results: list[Any] = []
     for p in prompts:
@@ -112,5 +119,5 @@ def ask_batch(prompts: List[str], *, output_model: Type[Any] | None = None) -> L
                 {"role": "user", "content": p},
             ]
         )
-        results.append(_parse_and_validate(raw, pyd_model, api_key=api_key))
+        results.append(_parse_and_validate(raw, pyd_model, llm_key=llm_key))
     return results
