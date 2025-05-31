@@ -6,34 +6,29 @@ from dotenv import load_dotenv
 # .env ファイルを読み込む
 load_dotenv()
 
-# APIキー設定
-_API_KEY: Optional[str] = None
-# モデル設定
-_MODEL: str = "gpt-3.5-turbo"  # デフォルトモデル
+# グローバル設定
+_MODEL: str = "gpt-4o-mini"
+_LLM_KEY: Optional[str] = None
 
 
-def configure(model: str = "gpt-3.5-turbo") -> None:
+def set_config(model: str, llm_key: Optional[str] = None) -> None:
     """
-    dariko の設定を行う
+    モデルとLLMキー（APIキーまたはトークン）を設定する
 
     Args:
-        model: 使用するLLMモデル名。デフォルトは "gpt-3.5-turbo"
+        model: 使用するLLMモデル名
+        llm_key: APIキーまたはトークン（オプション）
     """
-    global _API_KEY, _MODEL
-    env_key = os.getenv("DARIKO_API_KEY")
-    if env_key is None:
-        raise RuntimeError("APIキーが設定されていません。環境変数 DARIKO_API_KEY を設定してください。")
-    _API_KEY = env_key
+    global _MODEL, _LLM_KEY
     _MODEL = model
-
-
-def get_api_key() -> str:
-    """設定されたAPIキーを取得する。未設定の場合はエラーを投げる。"""
-    if _API_KEY is None:
-        raise RuntimeError("APIキーが設定されていません。configure()を呼び出してください。")
-    return _API_KEY
+    _LLM_KEY = llm_key
 
 
 def get_model() -> str:
-    """設定されたモデル名を取得する。"""
+    """設定されたモデル名を返す"""
     return _MODEL
+
+
+def get_llm_key() -> Optional[str]:
+    """設定されたLLMキーを返す"""
+    return _LLM_KEY

@@ -9,6 +9,7 @@ LLMの出力をPydanticモデルで型安全に扱うためのPythonライブラ
 - バッチ処理に対応
 - シンプルなAPI
 - 環境変数から自動的にAPIキーを読み込み
+- 複数のLLM（GPT, Claude, Gemma等）に対応
 
 ## インストール
 
@@ -21,8 +22,13 @@ pip install dariko
 ### 基本的な使い方
 
 ```python
+import os
 from pydantic import BaseModel
-from dariko import ask
+from dariko import ask, set_config
+
+# APIキーの設定（環境変数から取得）
+llm_key = os.environ.get("DARIKO_API_KEY")
+set_config(model="gpt-4o-mini", llm_key=llm_key)
 
 # 出力モデルの定義
 class Person(BaseModel):
@@ -61,6 +67,46 @@ for i, result in enumerate(results, 1):
     print(f"名前: {result.name}")
     print(f"年齢: {result.age}")
     print(f"ダミー: {result.dummy}")
+```
+
+### ローカルモデル（Gemma）の使用例
+
+```python
+import os
+from pydantic import BaseModel
+from dariko import ask, set_config
+
+# Hugging Faceのアクセストークンを設定
+llm_key = os.environ.get("DARIKO_API_KEY")
+set_config(model="google/gemma-2b", llm_key=llm_key)
+
+class Person(BaseModel):
+    name: str
+    age: int
+    dummy: bool
+
+result: Person = ask("以下の形式のJSONを返してください:\n" + '{"name": "山田太郎", "age": 25, "dummy": false}')
+print(result)
+```
+
+### Claudeモデルの使用例
+
+```python
+import os
+from pydantic import BaseModel
+from dariko import ask, set_config
+
+# AnthropicのAPIキーを設定
+llm_key = os.environ.get("DARIKO_API_KEY")
+set_config(model="claude-3-opus-20240229", llm_key=llm_key)
+
+class Person(BaseModel):
+    name: str
+    age: int
+    dummy: bool
+
+result: Person = ask("以下の形式のJSONを返してください:\n" + '{"name": "山田太郎", "age": 25, "dummy": false}')
+print(result)
 ```
 
 ## 型推論の実践例
@@ -119,7 +165,13 @@ Darikoは以下の優先順位で型を推論します：
 以下の環境変数を設定することで、Darikoの動作を制御できます：
 
 - `DARIKO_API_KEY`: APIキー（必須）
+  - OpenAI APIキー
+  - Anthropic APIキー
+  - Hugging Faceアクセストークン
 - `DARIKO_MODEL`: 使用するモデル名（デフォルト: "gpt-4"）
+  - OpenAIモデル: "gpt-4", "gpt-3.5-turbo" など
+  - Claudeモデル: "claude-3-opus-20240229", "claude-3-sonnet-20240229" など
+  - Gemmaモデル: "google/gemma-2b" など
 
 ## 開発
 

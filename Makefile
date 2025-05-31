@@ -1,4 +1,4 @@
-.PHONY: format format-unsafe lint lint-unsafe setup test build publish
+.PHONY: format format-unsafe lint lint-unsafe setup test test-models test-core build publish
 
 format:
 	ruff format .
@@ -19,6 +19,27 @@ setup:
 
 test:
 	. .venv/bin/activate && pytest
+
+test-models:
+	. .venv/bin/activate && pytest tests/test_models/
+
+test-core:
+	. .venv/bin/activate && pytest tests/test_core/
+
+test-gpt:
+	. .venv/bin/activate && pytest tests/test_models/test_gpt.py
+
+test-gemma:
+	. .venv/bin/activate && pytest tests/test_models/test_gemma.py
+
+test-claude:
+	. .venv/bin/activate && pytest tests/test_models/test_claude.py
+
+test-ask:
+	. .venv/bin/activate && pytest tests/test_core/test_ask.py
+
+test-validation:
+	. .venv/bin/activate && pytest tests/test_core/test_validation.py
 
 build:
 	. .venv/bin/activate && python -m build

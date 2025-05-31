@@ -3,17 +3,15 @@ from pydantic import BaseModel
 
 from dariko import ask, ask_batch, set_config
 
-# 環境変数からAPIキーを取得
+# 環境変数からHugging Faceのアクセストークンを取得
 llm_key = os.environ.get("DARIKO_API_KEY")
-set_config(model="gpt-4o-mini", llm_key=llm_key)
-
+set_config(model="google/gemma-2b", llm_key=llm_key)
 
 # 出力モデル定義
 class Person(BaseModel):
     name: str
     age: int
     dummy: bool
-
 
 prompt = "以下の形式でJSONを返してください:\n" + '{"name": "山田太郎", "age": 25, "dummy": false}'
 result: Person = ask(prompt, output_model=Person)
