@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 import pytest
 
-from dariko import ask, set_config, ValidationError
+from dariko import ValidationError, ask, set_config
 from tests.conftest import Person, mock_invalid_response
 
 
@@ -19,4 +19,4 @@ def test_unsupported_model():
     """未サポートモデルのテスト"""
     with pytest.raises(ValueError, match="Unsupported model"):
         set_config(model="unsupported-model", llm_key="test_key")
-        ask("test", output_model=Person) 
+        ask("test", output_model=Person)

@@ -1,8 +1,6 @@
 import os
 from unittest.mock import patch
 
-import pytest
-
 from dariko import ask, set_config
 from tests.conftest import Person, mock_gpt_response
 
@@ -20,4 +18,4 @@ def test_configure_gpt(mock_post):
     os.environ["DARIKO_API_KEY"] = "direct_key"
     set_config(model="gpt-4o-mini", llm_key="direct_key")
     result: Person = ask("test", output_model=Person)
-    assert result.dummy is True 
+    assert result.dummy is True

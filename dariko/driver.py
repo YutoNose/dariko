@@ -1,26 +1,42 @@
-# llm.py
 from __future__ import annotations
 
 import inspect
 import json
-from typing import Any, List, Type, Dict
+from typing import Any, Dict, List, Type
 
 from pydantic import BaseModel, TypeAdapter
 from pydantic import ValidationError as _PydanticValidationError
 
-from .config import get_llm_key, get_model
+from .config import get_config, get_llm_key, get_model
 from .exceptions import ValidationError
 from .model_utils import get_pydantic_model, infer_output_model
 from .models.llm import LLM
-from .models.gpt import GPT
-from .models.gemma import Gemma
-from .models.claude import Claude
 
-# モデル名とLLMクラスのマッピング
-MODEL_MAPPING: Dict[str, Type[LLM]] = {
-    "gpt": GPT,
-    "gemma": Gemma,
-    "claude": Claude,
+
+# モデル名のプレフィックス -> 対応する LLM クラスを返す関数のマッピング。
+# Gemma (torch/transformers) を import するのは実際に使う時だけにするため遅延ロードする。
+def _gpt_class() -> Type[LLM]:
+    from .models.gpt import GPT
+
+    return GPT
+
+
+def _claude_class() -> Type[LLM]:
+    from .models.claude import Claude
+
+    return Claude
+
+
+def _gemma_class() -> Type[LLM]:
+    from .models.gemma import Gemma
+
+    return Gemma
+
+
+MODEL_MAPPING: Dict[str, Any] = {
+    "gpt": _gpt_class,
+    "claude": _claude_class,
+    "gemma": _gemma_class,
 }
 
 # ─────────────────────────────────────────────────────────────
@@ -45,28 +61,26 @@ def _resolve_model(output_model: Type[Any] | None) -> Type[BaseModel]:
 
 def _get_llm_instance() -> LLM:
     """
-    設定に基づいて適切なLLMインスタンスを返す
+    設定に基づいて適切な LLM インスタンスを生成する。
     """
+    cfg = get_config()
     model_name = get_model()
     llm_key = get_llm_key()
 
-    # モデル名からLLMクラスを特定
-    for prefix, llm_class in MODEL_MAPPING.items():
+    for prefix, llm_class_factory in MODEL_MAPPING.items():
         if prefix in model_name.lower():
-            return llm_class.configure(model_name=model_name, llm_key=llm_key)
+            return llm_class_factory().configure(
+                model_name=model_name,
+                llm_key=llm_key,
+                max_tokens=cfg.max_tokens,
+                temperature=cfg.temperature,
+                timeout=cfg.timeout,
+            )
 
     raise ValueError(f"Unsupported model: {model_name}")
 
 
-def _post_to_llm(messages: list[dict[str, str]]) -> str:
-    """
-    LLMを呼び出して content 文字列を返す。
-    """
-    llm = _get_llm_instance()
-    return llm.call(messages)
-
-
-def _parse_and_validate(raw_json: str, pyd_model: Type[BaseModel], *, llm_key: str) -> BaseModel:
+def _parse_and_validate(raw_json: str, pyd_model: Type[BaseModel]) -> BaseModel:
     """
     LLM 出力(JSON文字列)を parse & Pydantic 検証。
     成功すれば Pydantic モデルのインスタンスを返す。
@@ -85,23 +99,55 @@ def _parse_and_validate(raw_json: str, pyd_model: Type[BaseModel], *, llm_key: s
         raise ValidationError(e) from None
 
 
+def _run(pyd_model: Type[BaseModel], prompt: str) -> Any:
+    """
+    1 プロンプトを実行する。検証に失敗した場合はエラー内容を添えて
+    最大 ``max_retries`` 回まで LLM に再生成を促す (自己修復)。
+    """
+    cfg = get_config()
+    llm = _get_llm_instance()
+    schema = pyd_model.model_json_schema()
+
+    messages: List[Dict[str, str]] = [
+        {"role": "system", "content": f"次の JSON Schema に厳密に従い、JSON のみを返してください:\n{schema}"},
+        {"role": "user", "content": prompt},
+    ]
+
+    last_error: ValidationError | None = None
+    for _ in range(cfg.max_retries + 1):
+        raw = llm.call(messages, response_schema=schema)
+        try:
+            return _parse_and_validate(raw, pyd_model)
+        except ValidationError as e:
+            last_error = e
+            # 直前の出力とエラーを会話に追加し、修正版を要求する
+            messages = messages + [
+                {"role": "assistant", "content": raw},
+                {
+                    "role": "user",
+                    "content": (
+                        f"前回の出力は検証に失敗しました: {e}\n"
+                        "スキーマに厳密に従い、JSON のみを返してください。"
+                    ),
+                },
+            ]
+
+    assert last_error is not None
+    raise last_error
+
+
 # ─────────────────────────────────────────────────────────────
 # パブリック API
 # ─────────────────────────────────────────────────────────────
 def ask(prompt: str, *, output_model: Type[Any] | None = None) -> Any:
     """
     単一プロンプトを実行し、Pydantic 検証済みオブジェクトを返す。
+
+    検証に失敗した場合は ``set_config(max_retries=...)`` の回数だけ
+    LLM へ再生成を促してから ``ValidationError`` を送出する。
     """
     pyd_model = _resolve_model(output_model)
-    llm_key = get_llm_key()
-
-    raw = _post_to_llm(
-        [
-            {"role": "system", "content": f"{pyd_model.model_json_schema()}"},
-            {"role": "user", "content": prompt},
-        ]
-    )
-    return _parse_and_validate(raw, pyd_model, llm_key=llm_key)
+    return _run(pyd_model, prompt)
 
 
 def ask_batch(prompts: List[str], *, output_model: Type[Any] | None = None) -> List[Any]:
@@ -109,15 +155,4 @@ def ask_batch(prompts: List[str], *, output_model: Type[Any] | None = None) -> L
     複数プロンプトをバッチ処理し、検証済みオブジェクトをリストで返す。
     """
     pyd_model = _resolve_model(output_model)
-    llm_key = get_llm_key()
-
-    results: list[Any] = []
-    for p in prompts:
-        raw = _post_to_llm(
-            [
-                {"role": "system", "content": f"{pyd_model.model_json_schema()}"},
-                {"role": "user", "content": p},
-            ]
-        )
-        results.append(_parse_and_validate(raw, pyd_model, llm_key=llm_key))
-    return results
+    return [_run(pyd_model, p) for p in prompts]

@@ -43,4 +43,4 @@ def test_ask_batch(mock_post):
     results: list[Person] = ask_batch(prompts, output_model=Person)
     assert len(results) == 2
     assert all(isinstance(r, Person) for r in results)
-    assert all(r.dummy is True for r in results) 
+    assert all(r.dummy is True for r in results)
