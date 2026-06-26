@@ -1,5 +1,4 @@
 import os
-from unittest.mock import patch
 
 import pytest
 from pydantic import BaseModel
@@ -57,7 +56,9 @@ def mock_claude_response(*args, **kwargs):
             self._json = {
                 "content": [
                     {
-                        "text": '{"name": "test", "age": 20, "dummy": true}'
+                        "type": "tool_use",
+                        "name": "dariko_output",
+                        "input": {"name": "test", "age": 20, "dummy": True},
                     }
                 ]
             }
@@ -81,4 +82,4 @@ def mock_invalid_response(*args, **kwargs):
         def json(self):
             return self._json
 
-    return MockResponse() 
+    return MockResponse()

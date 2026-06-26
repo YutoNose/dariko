@@ -1,7 +1,13 @@
 from unittest.mock import patch
 
+import pytest
+
 from dariko import ask, set_config
 from tests.conftest import Person, mock_gemma_response
+
+# Gemma は任意依存 (dariko[gemma])。torch/transformers 未導入の環境ではスキップ。
+pytest.importorskip("transformers")
+pytest.importorskip("torch")
 
 
 @patch("dariko.models.gemma.Gemma.call", side_effect=mock_gemma_response)
@@ -12,4 +18,4 @@ def test_configure_gemma(mock_model, mock_tokenizer, mock_call):
     # Hugging Faceのトークンを設定
     set_config(model="google/gemma-2b", llm_key="test_hf_token")
     result: Person = ask("test", output_model=Person)
-    assert result.dummy is True 
+    assert result.dummy is True

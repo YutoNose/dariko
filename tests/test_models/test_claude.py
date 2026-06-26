@@ -10,4 +10,4 @@ def test_configure_claude(mock_post):
     # AnthropicのAPIキーを設定
     set_config(model="claude-3-opus-20240229", llm_key="test_anthropic_key")
     result: Person = ask("test", output_model=Person)
-    assert result.dummy is True 
+    assert result.dummy is True

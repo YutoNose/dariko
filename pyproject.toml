@@ -24,8 +24,7 @@ classifiers = [
 dependencies = [
     "pydantic>=2.0.0",
     "requests>=2.31.0",
-    "torch>=2.0.0",
-    "transformers>=4.37.0",
+    "python-dotenv>=1.0.0",
 ]
 keywords = ["llm", "pydantic", "type-safety", "openai", "gpt"]
 
@@ -74,11 +73,14 @@ known-first-party = ["dariko"]
 convention = "google"
 
 [project.optional-dependencies]
+gemma = [
+    "torch>=2.0.0",
+    "transformers>=4.37.0",
+]
 develop = [
     "pytest",
     "ruff",
     "pre-commit",
-    "dotenv"
 ]
 
 [tool.semantic_release]

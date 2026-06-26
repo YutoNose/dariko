@@ -7,6 +7,9 @@ LLMの出力をPydanticモデルで型安全に扱うためのPythonライブラ
 - LLMの出力をPydanticモデルで型安全に扱える
 - 型アノテーションから自動的に出力モデルを推論
 - バッチ処理に対応
+- **検証失敗時の自己修復リトライ** (エラー内容を添えて LLM に再生成を促す)
+- **構造化出力の強制** (OpenAI Structured Outputs / Claude tool-use)
+- `max_tokens` / `temperature` / `timeout` / `max_retries` を設定可能
 - シンプルなAPI
 - 環境変数から自動的にAPIキーを読み込み
 - 複数のLLM（GPT, Claude, Gemma等）に対応
@@ -14,7 +17,11 @@ LLMの出力をPydanticモデルで型安全に扱うためのPythonライブラ
 ## インストール
 
 ```bash
+# GPT / Claude (API 経由) のみ — 軽量
 pip install dariko
+
+# Gemma (ローカル推論。torch / transformers を含む)
+pip install "dariko[gemma]"
 ```
 
 ## 使用方法
@@ -219,6 +226,34 @@ pytest tests/
    - コミットメッセージは[Angularのコミットメッセージ規約](https://www.conventionalcommits.org/ja/v1.0.0/)に従ってください
    - 複数のコミットがある場合、最も大きな変更に基づいてバージョンが更新されます
    - GitHub CLI（`gh`）のインストールと認証が必要です
+
+## 高度な設定
+
+`set_config` で生成パラメータと自己修復リトライ回数を指定できます。
+
+```python
+from dariko import set_config
+
+set_config(
+    model="gpt-4o-mini",
+    llm_key="sk-...",
+    max_tokens=2048,    # 生成する最大トークン数
+    temperature=0.0,    # 0.0 で決定的
+    timeout=60.0,       # HTTP タイムアウト秒
+    max_retries=2,      # 検証失敗時に LLM へ再生成を促す回数
+)
+```
+
+### 自己修復リトライ
+
+`ask` / `ask_batch` は、LLM 出力が JSON として壊れていたり Pydantic 検証に
+失敗した場合、エラー内容を会話に添えて `max_retries` 回まで再生成を促します。
+それでも成功しなければ `ValidationError` を送出します (fail fast)。
+
+### 構造化出力の強制
+
+- **GPT**: `response_format: json_schema` (Structured Outputs) でスキーマ準拠を促す
+- **Claude**: tool-use を強制し、スキーマに従った JSON を確実に取得する
 
 ## ライセンス
 
