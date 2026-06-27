@@ -58,6 +58,24 @@ def test_ask_stream_yields_and_validates():
     assert result.dummy is True
 
 
+def test_ask_stream_partials():
+    """partials() が部分モデルを progressively yield し、完了後に検証済みモデルを返す。"""
+    set_config(model="gpt-4o-mini", llm_key="test_key")
+    parts = ['{"name": "test"', ', "age": 20', ', "dummy": true}']
+
+    with patch("dariko.models.gpt.requests.post", return_value=_StreamResp(_gpt_sse(parts))):
+        stream = ask_stream("test", output_model=Person)
+        snapshots = [p.model_dump() for p in stream.partials()]
+        result = stream.result()
+
+    # name だけ -> name+age -> 全部、と段階的に埋まる
+    assert {"name": "test", "age": None, "dummy": None} in snapshots
+    assert {"name": "test", "age": 20, "dummy": None} in snapshots
+    assert snapshots[-1] == {"name": "test", "age": 20, "dummy": True}
+    assert isinstance(result, Person)
+    assert result.dummy is True
+
+
 def test_result_before_consume_raises():
     """消費前に result() を呼ぶとエラー。"""
     set_config(model="gpt-4o-mini", llm_key="test_key")

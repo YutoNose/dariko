@@ -13,6 +13,7 @@ from .config import get_config, get_llm_key, get_model
 from .exceptions import ValidationError
 from .model_utils import get_pydantic_model, infer_output_model
 from .models.llm import LLM
+from .partial import build_partial_model, parse_partial_json
 
 
 # モデル名のプレフィックス -> 対応する LLM クラスを返す関数のマッピング。
@@ -46,11 +47,14 @@ MODEL_MAPPING: Dict[str, Any] = {
 # ─────────────────────────────────────────────────────────────
 
 
-def _resolve_model(output_model: Type[Any] | None) -> Type[BaseModel]:
+def _resolve_model(output_model: Type[Any] | None) -> tuple[Type[BaseModel], bool]:
     """
     output_model が None の場合は呼び出しフレームから推論し、
-    最終的に Pydantic Model 型を返す。
+    ``(Pydantic Model 型, リストかどうか)`` を返す。
+
+    ``output_model=list[Person]`` のように指定された場合は出力をリストとして検証する。
     """
+    is_list = output_model is not None and getattr(output_model, "__origin__", None) is list
     if output_model is None:
         caller_frame = inspect.currentframe().f_back
         model = infer_output_model(caller_frame)
@@ -58,7 +62,7 @@ def _resolve_model(output_model: Type[Any] | None) -> Type[BaseModel]:
             raise TypeError("型アノテーションが取得できませんでした。output_model を指定してください。")
     else:
         model = output_model
-    return get_pydantic_model(model)  # 型チェックも兼ねる
+    return get_pydantic_model(model), is_list  # 型チェックも兼ねる
 
 
 def _get_llm_instance() -> LLM:
@@ -82,14 +86,15 @@ def _get_llm_instance() -> LLM:
     raise ValueError(f"Unsupported model: {model_name}")
 
 
-def _parse_and_validate(raw_json: str, pyd_model: Type[BaseModel]) -> BaseModel:
+def _parse_and_validate(raw_json: str, pyd_model: Type[BaseModel], *, is_list: bool = False) -> Any:
     """
     LLM 出力(JSON文字列)を parse & Pydantic 検証。
-    成功すれば Pydantic モデルのインスタンスを返す。
+    ``is_list`` が真なら ``list[pyd_model]`` として検証する。
     """
+    target: Any = List[pyd_model] if is_list else pyd_model
     try:
         data = json.loads(raw_json)
-        return TypeAdapter(pyd_model).validate_python(data)
+        return TypeAdapter(target).validate_python(data)
     except json.JSONDecodeError as e:
         raise ValidationError(
             _PydanticValidationError.from_exception_data(
@@ -101,7 +106,7 @@ def _parse_and_validate(raw_json: str, pyd_model: Type[BaseModel]) -> BaseModel:
         raise ValidationError(e) from None
 
 
-def _run(pyd_model: Type[BaseModel], prompt: str) -> Any:
+def _run(pyd_model: Type[BaseModel], prompt: str, *, is_list: bool = False) -> Any:
     """
     1 プロンプトを実行する。検証に失敗した場合はエラー内容を添えて
     最大 ``max_retries`` 回まで LLM に再生成を促す (自己修復)。
@@ -109,17 +114,18 @@ def _run(pyd_model: Type[BaseModel], prompt: str) -> Any:
     cfg = get_config()
     llm = _get_llm_instance()
     schema = pyd_model.model_json_schema()
+    request_schema = {"type": "array", "items": schema} if is_list else schema
 
     messages: List[Dict[str, str]] = [
-        {"role": "system", "content": f"次の JSON Schema に厳密に従い、JSON のみを返してください:\n{schema}"},
+        {"role": "system", "content": f"次の JSON Schema に厳密に従い、JSON のみを返してください:\n{request_schema}"},
         {"role": "user", "content": prompt},
     ]
 
     last_error: ValidationError | None = None
     for _ in range(cfg.max_retries + 1):
-        raw = llm.call(messages, response_schema=schema)
+        raw = llm.call(messages, response_schema=request_schema)
         try:
-            return _parse_and_validate(raw, pyd_model)
+            return _parse_and_validate(raw, pyd_model, is_list=is_list)
         except ValidationError as e:
             last_error = e
             # 直前の出力とエラーを会話に追加し、修正版を要求する
@@ -147,17 +153,18 @@ def ask(prompt: str, *, output_model: Type[Any] | None = None) -> Any:
 
     検証に失敗した場合は ``set_config(max_retries=...)`` の回数だけ
     LLM へ再生成を促してから ``ValidationError`` を送出する。
+    ``output_model=list[Model]`` を指定すると出力をリストとして検証する。
     """
-    pyd_model = _resolve_model(output_model)
-    return _run(pyd_model, prompt)
+    pyd_model, is_list = _resolve_model(output_model)
+    return _run(pyd_model, prompt, is_list=is_list)
 
 
 def ask_batch(prompts: List[str], *, output_model: Type[Any] | None = None) -> List[Any]:
     """
     複数プロンプトをバッチ処理し、検証済みオブジェクトをリストで返す。
     """
-    pyd_model = _resolve_model(output_model)
-    return [_run(pyd_model, p) for p in prompts]
+    pyd_model, is_list = _resolve_model(output_model)
+    return [_run(pyd_model, p, is_list=is_list) for p in prompts]
 
 
 # ─────────────────────────────────────────────────────────────
@@ -167,8 +174,8 @@ async def aask(prompt: str, *, output_model: Type[Any] | None = None) -> Any:
     """
     :func:`ask` の非同期版。ブロッキング I/O を別スレッドへ退避して実行する。
     """
-    pyd_model = _resolve_model(output_model)
-    return await asyncio.to_thread(_run, pyd_model, prompt)
+    pyd_model, is_list = _resolve_model(output_model)
+    return await asyncio.to_thread(lambda: _run(pyd_model, prompt, is_list=is_list))
 
 
 async def aask_batch(
@@ -185,14 +192,14 @@ async def aask_batch(
         output_model: 出力 Pydantic モデル (省略時は型推論)。
         concurrency: 同時実行数の上限。``None`` なら全件並行。
     """
-    pyd_model = _resolve_model(output_model)
+    pyd_model, is_list = _resolve_model(output_model)
     semaphore = asyncio.Semaphore(concurrency) if concurrency else None
 
     async def _one(p: str) -> Any:
         if semaphore is None:
-            return await asyncio.to_thread(_run, pyd_model, p)
+            return await asyncio.to_thread(lambda: _run(pyd_model, p, is_list=is_list))
         async with semaphore:
-            return await asyncio.to_thread(_run, pyd_model, p)
+            return await asyncio.to_thread(lambda: _run(pyd_model, p, is_list=is_list))
 
     return await asyncio.gather(*(_one(p) for p in prompts))
 
@@ -202,6 +209,9 @@ async def aask_batch(
 # ─────────────────────────────────────────────────────────────
 class StreamedResponse:
     """ストリーミング応答。テキスト増分を逐次 yield しつつ、完了後に検証済みモデルを返す。
+
+    テキスト増分が欲しい場合は ``for chunk in stream``、部分オブジェクトが
+    欲しい場合は ``for partial in stream.partials()`` を使う (どちらか一方のみ消費可能)。
 
     使い方::
 
@@ -225,6 +235,31 @@ class StreamedResponse:
         self._result = _parse_and_validate("".join(self._buffer), self._pyd_model)
         self._done = True
 
+    def partials(self) -> Iterator[Any]:
+        """部分的に埋まったモデル (全フィールド Optional) を逐次 yield する。
+
+        新しいチャンクを受け取るたびに、これまでの JSON を可能な範囲で
+        パースし、前回と異なれば部分モデルを yield する。完了後は
+        ``result()`` で完全な検証済みモデルを取得できる。
+        """
+        partial_cls = build_partial_model(self._pyd_model)
+        last: Any = None
+        for chunk in self._chunks:
+            self._buffer.append(chunk)
+            data = parse_partial_json(self.text)
+            if data is None or not isinstance(data, dict):
+                continue
+            try:
+                partial = partial_cls.model_validate(data)
+            except _PydanticValidationError:
+                continue
+            dumped = partial.model_dump()
+            if dumped != last:
+                last = dumped
+                yield partial
+        self._result = _parse_and_validate("".join(self._buffer), self._pyd_model)
+        self._done = True
+
     @property
     def text(self) -> str:
         """これまでに受信したテキスト全体。"""
@@ -244,7 +279,7 @@ def ask_stream(prompt: str, *, output_model: Type[Any] | None = None) -> Streame
     増分テキストを逐次受け取りつつ、完了後に ``result()`` で検証済みモデルを得る。
     ストリーミングでは自己修復リトライは行わない (検証は完了時に1回)。
     """
-    pyd_model = _resolve_model(output_model)
+    pyd_model, _is_list = _resolve_model(output_model)
     llm = _get_llm_instance()
     schema = pyd_model.model_json_schema()
     messages: List[Dict[str, str]] = [

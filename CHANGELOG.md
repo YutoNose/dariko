@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- 部分オブジェクトのストリーミング: `StreamedResponse.partials()` (全フィールド Optional の部分モデルを逐次 yield)
+- `list[Model]` 出力: `output_model=list[Person]` でリストとして検証
+- 部分 JSON パーサ (`dariko.partial`) とテスト
+
+## [3.1.0]
+
+### Added
 - 非同期 API: `aask` / `aask_batch` (`concurrency` で同時実行数を制御)
 - ストリーミング API: `ask_stream` と `StreamedResponse` (増分テキスト + 完了後に検証済みモデル)
 - 非同期・ストリーミングのテスト
