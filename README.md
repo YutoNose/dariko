@@ -10,6 +10,8 @@ LLMの出力をPydanticモデルで型安全に扱うためのPythonライブラ
 - **検証失敗時の自己修復リトライ** (エラー内容を添えて LLM に再生成を促す)
 - **構造化出力の強制** (OpenAI Structured Outputs / Claude tool-use)
 - **非同期 API** (`aask` / `aask_batch`) と **ストリーミング** (`ask_stream`)
+- **部分オブジェクトのストリーミング** (`partials()`) — 埋まりかけのモデルを逐次取得
+- **`list[Model]` 出力** (`output_model=list[Person]`) でリスト検証
 - `max_tokens` / `temperature` / `timeout` / `max_retries` を設定可能
 - シンプルなAPI
 - 環境変数から自動的にAPIキーを読み込み
@@ -284,7 +286,26 @@ for chunk in stream:        # 生成テキストを逐次受け取る
 person = stream.result()    # 完了後に検証済みオブジェクト
 ```
 
+### 部分オブジェクトのストリーミング
+
+埋まりかけのモデル (全フィールド Optional) を逐次受け取れます。UI のプログレッシブ表示に便利です。
+
+```python
+stream = ask_stream("...", output_model=Person)
+for partial in stream.partials():
+    print(partial)   # name だけ -> name+age -> 全部、と段階的に埋まる
+
+person = stream.result()
+```
+
 > ストリーミングでは自己修復リトライは行わず、完了時に1回だけ検証します。
+
+## リスト出力
+
+```python
+people = ask("3人分の人物を返して", output_model=list[Person])
+# -> list[Person] として検証される
+```
 
 ## ライセンス
 
