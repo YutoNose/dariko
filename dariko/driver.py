@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import inspect
 import json
-from typing import Any, Dict, List, Type
+from collections.abc import Iterator
+from typing import Any, Dict, List, Optional, Type
 
 from pydantic import BaseModel, TypeAdapter
 from pydantic import ValidationError as _PydanticValidationError
@@ -156,3 +158,98 @@ def ask_batch(prompts: List[str], *, output_model: Type[Any] | None = None) -> L
     """
     pyd_model = _resolve_model(output_model)
     return [_run(pyd_model, p) for p in prompts]
+
+
+# ─────────────────────────────────────────────────────────────
+# 非同期 API
+# ─────────────────────────────────────────────────────────────
+async def aask(prompt: str, *, output_model: Type[Any] | None = None) -> Any:
+    """
+    :func:`ask` の非同期版。ブロッキング I/O を別スレッドへ退避して実行する。
+    """
+    pyd_model = _resolve_model(output_model)
+    return await asyncio.to_thread(_run, pyd_model, prompt)
+
+
+async def aask_batch(
+    prompts: List[str],
+    *,
+    output_model: Type[Any] | None = None,
+    concurrency: Optional[int] = None,
+) -> List[Any]:
+    """
+    複数プロンプトを並行実行する :func:`ask_batch` の非同期版。
+
+    Args:
+        prompts: プロンプト列。
+        output_model: 出力 Pydantic モデル (省略時は型推論)。
+        concurrency: 同時実行数の上限。``None`` なら全件並行。
+    """
+    pyd_model = _resolve_model(output_model)
+    semaphore = asyncio.Semaphore(concurrency) if concurrency else None
+
+    async def _one(p: str) -> Any:
+        if semaphore is None:
+            return await asyncio.to_thread(_run, pyd_model, p)
+        async with semaphore:
+            return await asyncio.to_thread(_run, pyd_model, p)
+
+    return await asyncio.gather(*(_one(p) for p in prompts))
+
+
+# ─────────────────────────────────────────────────────────────
+# ストリーミング API
+# ─────────────────────────────────────────────────────────────
+class StreamedResponse:
+    """ストリーミング応答。テキスト増分を逐次 yield しつつ、完了後に検証済みモデルを返す。
+
+    使い方::
+
+        stream = ask_stream("...", output_model=Person)
+        for chunk in stream:      # 生成テキストを逐次受け取る
+            print(chunk, end="")
+        person = stream.result()  # 完了後に Pydantic 検証済みオブジェクト
+    """
+
+    def __init__(self, chunks: Iterator[str], pyd_model: Type[BaseModel]):
+        self._chunks = chunks
+        self._pyd_model = pyd_model
+        self._buffer: List[str] = []
+        self._result: Any = None
+        self._done = False
+
+    def __iter__(self) -> Iterator[str]:
+        for chunk in self._chunks:
+            self._buffer.append(chunk)
+            yield chunk
+        self._result = _parse_and_validate("".join(self._buffer), self._pyd_model)
+        self._done = True
+
+    @property
+    def text(self) -> str:
+        """これまでに受信したテキスト全体。"""
+        return "".join(self._buffer)
+
+    def result(self) -> Any:
+        """検証済みオブジェクトを返す (ストリームを最後まで消費後に呼ぶこと)。"""
+        if not self._done:
+            raise RuntimeError("ストリームを最後まで消費してから result() を呼んでください")
+        return self._result
+
+
+def ask_stream(prompt: str, *, output_model: Type[Any] | None = None) -> StreamedResponse:
+    """
+    プロンプトをストリーミング実行し、:class:`StreamedResponse` を返す。
+
+    増分テキストを逐次受け取りつつ、完了後に ``result()`` で検証済みモデルを得る。
+    ストリーミングでは自己修復リトライは行わない (検証は完了時に1回)。
+    """
+    pyd_model = _resolve_model(output_model)
+    llm = _get_llm_instance()
+    schema = pyd_model.model_json_schema()
+    messages: List[Dict[str, str]] = [
+        {"role": "system", "content": f"次の JSON Schema に厳密に従い、JSON のみを返してください:\n{schema}"},
+        {"role": "user", "content": prompt},
+    ]
+    chunks = llm.call_stream(messages, response_schema=schema)
+    return StreamedResponse(chunks, pyd_model)

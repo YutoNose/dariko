@@ -9,6 +9,7 @@ LLMの出力をPydanticモデルで型安全に扱うためのPythonライブラ
 - バッチ処理に対応
 - **検証失敗時の自己修復リトライ** (エラー内容を添えて LLM に再生成を促す)
 - **構造化出力の強制** (OpenAI Structured Outputs / Claude tool-use)
+- **非同期 API** (`aask` / `aask_batch`) と **ストリーミング** (`ask_stream`)
 - `max_tokens` / `temperature` / `timeout` / `max_retries` を設定可能
 - シンプルなAPI
 - 環境変数から自動的にAPIキーを読み込み
@@ -254,6 +255,36 @@ set_config(
 
 - **GPT**: `response_format: json_schema` (Structured Outputs) でスキーマ準拠を促す
 - **Claude**: tool-use を強制し、スキーマに従った JSON を確実に取得する
+
+## 非同期 API
+
+```python
+import asyncio
+from dariko import aask, aask_batch
+
+async def main():
+    # 単発
+    person = await aask("...", output_model=Person)
+
+    # 複数プロンプトを並行実行 (concurrency で同時実行数を制限)
+    people = await aask_batch(["...", "..."], output_model=Person, concurrency=4)
+
+asyncio.run(main())
+```
+
+## ストリーミング
+
+```python
+from dariko import ask_stream
+
+stream = ask_stream("...", output_model=Person)
+for chunk in stream:        # 生成テキストを逐次受け取る
+    print(chunk, end="", flush=True)
+
+person = stream.result()    # 完了後に検証済みオブジェクト
+```
+
+> ストリーミングでは自己修復リトライは行わず、完了時に1回だけ検証します。
 
 ## ライセンス
 
