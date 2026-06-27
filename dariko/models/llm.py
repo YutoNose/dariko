@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
 from typing import Any, Dict, List, Optional
 
 
@@ -34,6 +35,15 @@ class LLM(ABC):
             response_schema: 出力を強制する Pydantic JSON Schema (任意)。
         """
         ...
+
+    def call_stream(
+        self, messages: List[Dict[str, str]], *, response_schema: Optional[Dict[str, Any]] = None
+    ) -> Iterator[str]:
+        """応答テキストを増分 (トークン) で逐次 yield する。
+
+        既定では未対応。ストリーミングをサポートするサブクラスが上書きする。
+        """
+        raise NotImplementedError(f"{type(self).__name__} はストリーミングに未対応です")
 
     @classmethod
     def configure(cls, model_name: str, llm_key: Optional[str] = None, **kwargs: Any) -> "LLM":
